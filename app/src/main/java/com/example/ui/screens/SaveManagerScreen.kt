@@ -29,6 +29,7 @@ import com.example.data.model.GameMod
 import com.example.ui.CharacterViewModel
 import com.example.ui.components.GothicCard
 import com.example.ui.theme.*
+import com.example.ui.util.rememberSaveFilePicker
 
 @Composable
 fun SaveManagerScreen(
@@ -52,26 +53,16 @@ fun SaveManagerScreen(
         "${prefix}_${hero.multiplayerSlot}.$ext"
     }
 
-    // File Pickers using Storage Access Framework (SAF)
-    val openSaveLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument()
-    ) { uri ->
-        if (uri != null) {
-            runCatching {
-                context.contentResolver.openInputStream(uri)?.use { stream ->
-                    val bytes = stream.readBytes()
-                    val filename = uri.lastPathSegment ?: "save.sv"
-                    if (filename.endsWith(".json", ignoreCase = true) || bytes.take(10).toByteArray().decodeToString().contains("{")) {
-                        viewModel.importNoctonicJson(String(bytes))
-                    } else {
-                        viewModel.importSaveBytes(bytes, filename)
-                    }
-                }
-            }.onFailure {
-                viewModel.showMessage("Failed to open file: ${it.message}")
+    val openSaveLauncher = rememberSaveFilePicker(
+        onFileSelected = { bytes, filename ->
+            if (filename.endsWith(".json", ignoreCase = true) || bytes.take(10).toByteArray().decodeToString().contains("{")) {
+                viewModel.importNoctonicJson(String(bytes))
+            } else {
+                viewModel.importSaveBytes(bytes, filename)
             }
-        }
-    }
+        },
+        onError = { msg -> viewModel.showMessage("Failed to open file: $msg") }
+    )
 
     val createSaveLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/octet-stream")
