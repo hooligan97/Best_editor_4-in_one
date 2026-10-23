@@ -29,9 +29,9 @@ jobs:
         shell: bash
         run: |
           if [ -n "${{ secrets.GEMINI_API_KEY }}" ]; then
-            echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" > .env
+            echo "GEMINI_API_KEY=\"${{ secrets.GEMINI_API_KEY }}\"" > .env
           else
-            echo "GEMINI_API_KEY=\"\"" > .env
+            echo "GEMINI_API_KEY=\"PLACEHOLDER\"" > .env
           fi
 
       - name: Build with Gradle
