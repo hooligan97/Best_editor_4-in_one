@@ -39,7 +39,7 @@ fun DevilutionXApp(
     val saveLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri: Uri? ->
         if (uri != null) {
             runCatching {
-                val bytes = viewModel.exportSaveMpqBytes()
+                val bytes = viewModel.exportSaveMpqBytes(context.cacheDir)
                 val output = context.contentResolver.openOutputStream(uri)
                     ?: throw IOException("Unable to open destination document for writing.")
                 output.use { it.write(bytes) }

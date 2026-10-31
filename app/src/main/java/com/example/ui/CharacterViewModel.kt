@@ -27,6 +27,7 @@ data class SavedVaultHero(
 class CharacterViewModel : ViewModel() {
 
     private val _character = MutableStateFlow(HeroCharacter.createGodly(HeroClass.WARRIOR, "Aidan"))
+    private var importedOriginalSave: ByteArray? = null
     val character: StateFlow<HeroCharacter> = _character.asStateFlow()
 
     private val _activeTab = MutableStateFlow(EditorTab.HERO)
@@ -357,6 +358,7 @@ class CharacterViewModel : ViewModel() {
             _hexDump.value = MpqTool.formatHexDump(bytes, 24)
 
             val parsedHero = DevilutionXSaveParser.parseSaveBytes(bytes, filename)
+            importedOriginalSave = bytes.copyOf().takeIf { mpq.isValidMpq }
             _character.value = parsedHero
             showMessage("Imported $filename (${parsedHero.name}, Lv ${parsedHero.level} ${parsedHero.heroClass.displayName}${if (parsedHero.isMultiplayer) " [Multiplayer]" else ""})")
             true
@@ -366,7 +368,15 @@ class CharacterViewModel : ViewModel() {
         }
     }
 
-    fun exportSaveMpqBytes(): ByteArray {
+    fun exportSaveMpqBytes(backupDirectory: java.io.File? = null): ByteArray {
+        val original = importedOriginalSave
+        if (original != null && backupDirectory != null) {
+            return com.example.data.service.SaveFileService().exportNativeSave(
+                originalBytes = original,
+                hero = _character.value,
+                backupDirectory = java.io.File(backupDirectory, "native-save-backups"),
+            )
+        }
         return com.example.data.service.SaveFileService().exportSave(_character.value)
     }
 
