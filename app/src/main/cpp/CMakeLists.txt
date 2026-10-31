@@ -20,6 +20,13 @@ endif()
 # Upstream defines a desktop CLI executable in addition to d1edit. Android
 # consumes only the library; keep the CLI target out of the default build.
 add_subdirectory("${UPSTREAM_SAVE_CORE}" "${CMAKE_CURRENT_BINARY_DIR}/upstream")
+
+# The old bundled zlib exports a version-script symbol absent from newer NDKs.
+# Apply the compatibility option to zlib itself (parent add_link_options does not
+# reliably reach dependency targets created by upstream FetchContent).
+if(TARGET zlib)
+    target_link_options(zlib PRIVATE -Wl,--undefined-version)
+endif()
 if(TARGET editor)
     set_property(TARGET editor PROPERTY EXCLUDE_FROM_ALL TRUE)
 endif()
