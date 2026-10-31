@@ -6,7 +6,7 @@ Androidowy edytor postaci i zapisów Diablo/DevilutionX, oparty na Kotlinie, Jet
 
 HomeScreen pokazuje imię, klasę, poziom i szybkie atrybuty. Po imporcie prawidłowego MPQ przycisk zapisu korzysta z NativeSaveBridge: archiwum jest kopiowane do pliku roboczego, przed zmianą tworzona jest kopia .bak w prywatnym katalogu aplikacji, a writeHero() zapisuje zmodyfikowany PlayerPack do kopii. Bez załadowanego MPQ zachowany jest dotychczasowy eksport SaveFileService.
 
-Natywny zapis aktualizuje wyłącznie pola obsługiwane przez patchField (poziom, klasę, bazowe atrybuty, stat points, XP, złoto oraz bazowe i maksymalne HP/MP). Imię, ekwipunek, czary i pozostałe pola nie są jeszcze mapowane do PlayerPack i pozostają bez zmian w oryginalnym wpisie. Kopia .bak jest przechowywana w prywatnym katalogu cache aplikacji; nie jest automatycznie widoczna w katalogu zapisów gry.
+Natywny zapis aktualizuje wyłącznie pola obsługiwane przez patchField (poziom, klasę, bazowe atrybuty, stat points, XP, złoto oraz bazowe i maksymalne HP/MP). Imię, ekwipunek, czary i pozostałe pola nie są jeszcze mapowane do PlayerPack i pozostają bez zmian w oryginalnym wpisie. Kopia .bak jest przechowywana w prywatnym katalogu plików aplikacji; nie jest automatycznie widoczna w katalogu zapisów gry.
 
 ## Architektura
 
