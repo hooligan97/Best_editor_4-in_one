@@ -2,7 +2,7 @@
 
 Androidowy edytor postaci i zapisów Diablo/DevilutionX, oparty na Kotlinie, Jetpack Compose i natywnym JNI.
 
-## Architektura
+## Ekran główny\n\nHomeScreen prezentuje imię, klasę, poziom oraz szybkie atrybuty (Siła, Zręczność, Witalność). Przycisk zapisu otwiera systemowy picker dokumentów i eksportuje dane przez SaveFileService. NativeSaveBridge udostępnia osobny interfejs JNI do read/patch/write PlayerPack; nie jest jeszcze używany przez ten ekran, ponieważ wymaga transferu oryginalnego archiwum przez SAF i zachowania danych MPQ.\n\n## Architektura
 - Kotlin + Jetpack Compose / Material 3: UI.
 - CharacterViewModel: stan postaci w StateFlow oraz akcje edycji.
 - Warstwa danych: modele, parsery i usługi plików.

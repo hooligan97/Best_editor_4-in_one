@@ -3,6 +3,10 @@ package com.example.ui
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import java.io.IOException
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.background
@@ -32,6 +36,17 @@ fun DevilutionXApp(
     viewModel: CharacterViewModel = viewModel()
 ) {
     val context = LocalContext.current
+    val saveLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri: Uri? ->
+        if (uri != null) {
+            runCatching {
+                val bytes = viewModel.exportSaveMpqBytes()
+                val output = context.contentResolver.openOutputStream(uri)
+                    ?: throw IOException("Unable to open destination document for writing.")
+                output.use { it.write(bytes) }
+            }.onSuccess { viewModel.showMessage("Save exported.") }
+                .onFailure { viewModel.showMessage("Save failed: ${it.message}") }
+        }
+    }
     val hero by viewModel.character.collectAsState()
     val activeTab by viewModel.activeTab.collectAsState()
     val statusMessage by viewModel.statusMessage.collectAsState()
@@ -252,7 +267,7 @@ fun DevilutionXApp(
         ) {
             Crossfade(targetState = activeTab, label = "TabSwitch") { tab ->
                 when (tab) {
-                    EditorTab.HERO -> HeroOverviewScreen(viewModel = viewModel)
+                    EditorTab.HERO -> HomeScreen(viewModel = viewModel, onSaveChanges = { saveLauncher.launch("${hero.name.take(15)}.${hero.gameMod.defaultSaveExtension}") })
                     EditorTab.STATS -> StatsScreen(viewModel = viewModel)
                     EditorTab.SPELLS -> SpellbookScreen(viewModel = viewModel)
                     EditorTab.INVENTORY -> InventoryScreen(viewModel = viewModel)

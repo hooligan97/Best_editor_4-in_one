@@ -156,7 +156,7 @@ class CharacterViewModel : ViewModel() {
     }
 
     fun updateLevel(level: Int) {
-        val clamped = level.coerceIn(1, 50)
+        val clamped = level.coerceIn(1, _character.value.gameMod.maxLevel)
         val calculatedXp = HeroCharacter.xpForLevel(clamped)
         _character.update { it.copy(level = clamped, experience = calculatedXp) }
         showMessage("Level set to $clamped (XP updated)")
@@ -367,7 +367,7 @@ class CharacterViewModel : ViewModel() {
     }
 
     fun exportSaveMpqBytes(): ByteArray {
-        return DevilutionXSaveParser.createSaveFileMpq(_character.value)
+        return com.example.data.service.SaveFileService().exportSave(_character.value)
     }
 
     fun inspectBytes(bytes: ByteArray) {
