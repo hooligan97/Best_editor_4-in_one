@@ -27,6 +27,7 @@ data class SavedVaultHero(
 class CharacterViewModel : ViewModel() {
 
     private val _character = MutableStateFlow(HeroCharacter.createGodly(HeroClass.WARRIOR, "Aidan"))
+    private var importedOriginalSave: ByteArray? = null
     val character: StateFlow<HeroCharacter> = _character.asStateFlow()
 
     private val _activeTab = MutableStateFlow(EditorTab.HERO)
@@ -156,7 +157,7 @@ class CharacterViewModel : ViewModel() {
     }
 
     fun updateLevel(level: Int) {
-        val clamped = level.coerceIn(1, 50)
+        val clamped = level.coerceIn(1, _character.value.gameMod.maxLevel)
         val calculatedXp = HeroCharacter.xpForLevel(clamped)
         _character.update { it.copy(level = clamped, experience = calculatedXp) }
         showMessage("Level set to $clamped (XP updated)")
@@ -357,6 +358,7 @@ class CharacterViewModel : ViewModel() {
             _hexDump.value = MpqTool.formatHexDump(bytes, 24)
 
             val parsedHero = DevilutionXSaveParser.parseSaveBytes(bytes, filename)
+            importedOriginalSave = bytes.copyOf().takeIf { mpq.isValidMpq }
             _character.value = parsedHero
             showMessage("Imported $filename (${parsedHero.name}, Lv ${parsedHero.level} ${parsedHero.heroClass.displayName}${if (parsedHero.isMultiplayer) " [Multiplayer]" else ""})")
             true
@@ -366,8 +368,16 @@ class CharacterViewModel : ViewModel() {
         }
     }
 
-    fun exportSaveMpqBytes(): ByteArray {
-        return DevilutionXSaveParser.createSaveFileMpq(_character.value)
+    fun exportSaveMpqBytes(backupDirectory: java.io.File? = null): ByteArray {
+        val original = importedOriginalSave
+        if (original != null && backupDirectory != null) {
+            return com.example.data.service.SaveFileService().exportNativeSave(
+                originalBytes = original,
+                hero = _character.value,
+                backupDirectory = java.io.File(backupDirectory, "native-save-backups"),
+            )
+        }
+        return com.example.data.service.SaveFileService().exportSave(_character.value)
     }
 
     fun inspectBytes(bytes: ByteArray) {
