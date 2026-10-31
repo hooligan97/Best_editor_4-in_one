@@ -3,35 +3,26 @@ project(d1savebridge LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
-# This JNI bridge is written against the C++ core in:
-# https://github.com/hooligan97/diablo_character_editor_build
-#
-# Vendor/build its d1edit target (including libmpq, PKWare, zlib and bzip2)
-# into this directory tree before enabling the Android native build. The core
-# target must expose the headers under src/ and link to this shared library.
-#
-# Expected vendor layout:
-#   app/src/main/cpp/vendor/diablo_character_editor_build/
-#
-# add_subdirectory(vendor/diablo_character_editor_build EXCLUDE_FROM_ALL)
-# target_include_directories(d1savebridge PRIVATE
-#   vendor/diablo_character_editor_build/src
-#   vendor/diablo_character_editor_build/3p/PKWare)
-# target_link_libraries(d1savebridge PRIVATE d1edit)
+set(UPSTREAM_SAVE_CORE
+    "${CMAKE_CURRENT_SOURCE_DIR}/vendor/diablo_character_editor_build")
 
-add_library(d1savebridge SHARED native_save_bridge.cpp)
-
-# Deliberately fail configuration with a clear message until the upstream C++
-# core is vendored. This prevents shipping a library that silently cannot parse.
-if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/vendor/diablo_character_editor_build/src/pack.h")
+if(NOT EXISTS "${UPSTREAM_SAVE_CORE}/src/pack.h")
     message(FATAL_ERROR
-        "Missing upstream save core. Vendor hooligan97/diablo_character_editor_build "
-        "under app/src/main/cpp/vendor/diablo_character_editor_build before building.")
+        "Missing upstream save core submodule. Initialize "
+        "app/src/main/cpp/vendor/diablo_character_editor_build.")
 endif()
 
-add_subdirectory(vendor/diablo_character_editor_build EXCLUDE_FROM_ALL)
+# Upstream defines a desktop CLI executable in addition to d1edit. Android
+# consumes only the library; keep the CLI target out of the default build.
+add_subdirectory("${UPSTREAM_SAVE_CORE}" "${CMAKE_CURRENT_BINARY_DIR}/upstream")
+if(TARGET editor)
+    set_property(TARGET editor PROPERTY EXCLUDE_FROM_ALL TRUE)
+endif()
+
+add_library(d1savebridge SHARED native_save_bridge.cpp)
 target_include_directories(d1savebridge PRIVATE
-    vendor/diablo_character_editor_build/src
-    vendor/diablo_character_editor_build/3p/PKWare)
+    "${UPSTREAM_SAVE_CORE}/src"
+    "${UPSTREAM_SAVE_CORE}/3p/PKWare")
 target_link_libraries(d1savebridge PRIVATE d1edit)

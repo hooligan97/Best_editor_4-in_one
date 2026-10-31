@@ -1,36 +1,26 @@
 package com.example.data.parser
 
 /**
- * JNI boundary for the DevilutionX-derived MPQ + save codec.
+ * JNI interface to the upstream Diablo save core.
  *
- * The byte array returned by [readHero] is the exact decoded PlayerPack payload.
- * Keep it as the authoritative raw snapshot; map fields for UI separately and patch
- * only fields the user changed before calling [writeHero].
- *
- * This API intentionally does not serialize through JSON.
+ * readHero returns the decrypted, uncompressed PlayerPack bytes. Keep those bytes
+ * as the editing session's source of truth. patchField returns a copy with one
+ * supported field changed, preserving every other byte including unknown/reserved data.
  */
 object NativeSaveBridge {
     init {
         System.loadLibrary("d1savebridge")
     }
 
-    /**
-     * Opens an existing .sv/.hsv MPQ and returns its decoded "hero" payload.
-     *
-     * @throws IllegalStateException if the archive, codec signature, or payload is invalid.
-     */
     @JvmStatic
-    external fun readHero(
-        savePath: String,
-        multiplayer: Boolean,
-        spawn: Boolean,
-    ): ByteArray
+    external fun readHero(savePath: String, multiplayer: Boolean, spawn: Boolean): ByteArray
+
+    @JvmStatic
+    external fun patchField(rawHero: ByteArray, fieldName: String, value: Long): ByteArray
 
     /**
-     * Re-encodes [rawHero] and updates only the "hero" MPQ entry in [savePath].
-     * All fields not patched in [rawHero] remain byte-for-byte as supplied.
-     *
-     * Save to a copy first; the native MPQ writer updates the target archive.
+     * Re-encodes the decoded PlayerPack and replaces only MPQ's "hero" entry.
+     * Save to a copy of the original archive before writing.
      */
     @JvmStatic
     external fun writeHero(

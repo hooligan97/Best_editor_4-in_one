@@ -1,32 +1,32 @@
-# Native save bridge integration
+# Native save bridge
 
-## Current boundary
+## Architecture
 
-`NativeSaveBridge` exposes the decoded `PlayerPack` payload as raw bytes to Kotlin. This avoids a JSON conversion round-trip. The native read/write implementation uses the upstream APIs:
-
-- `MpqArchive::Open` and `ReadArchive(archive, "hero", ...)`
-- `codec_decode` / `codec_encode` through `ReadArchive` and the upstream save codec
-- `MpqWriter::WriteFile("hero", ...)` to replace the hero entry without rebuilding the archive by hand
-
-The bridge validates that the decoded hero length matches `sizeof(PlayerPack)`. The multiplayer/spawn flags select the password through `pfile_get_password()`; Hellfire is retained as an explicit game-mode flag.
-
-## Raw-data edit policy
-
-1. Load a save to a raw decoded byte array.
-2. Keep that array as the authoritative source of truth for the editing session.
-3. Decode only supported fields for the Compose view model.
-4. When a field is edited, patch its corresponding bytes in a copy of the original array; do not instantiate a zero-filled PlayerPack and serialize every field.
-5. Save the patched raw bytes to a copy of the original archive first.
-6. Re-open the output and compare every untouched byte/field, as well as the edited fields.
-
-Unknown fields and reserved bytes are therefore preserved. The Kotlin model should carry this raw snapshot (or an opaque session identifier) alongside its display values.
-
-## Upstream source and build status
-
-The native bridge source expects the upstream C++ project to be vendored at:
+The `NativeSaveBridge` JNI layer uses the upstream `d1edit` C++ core from [hooligan97/diablo_character_editor_build](https://github.com/hooligan97/diablo_character_editor_build), pinned as a Git submodule at:
 
 `app/src/main/cpp/vendor/diablo_character_editor_build`
 
-The CMake file intentionally fails with an explanatory error until that source and its third-party dependencies are present. Do not enable a release build with a stub/no-op parser. The upstream CLI's `main()` is not called; JNI directly uses the archive/codec APIs.
+It calls reusable APIs, not the CLI `main()`:
+- `MpqArchive::Open` and `ReadArchive(*archive, "hero", ...)` for MPQ open, internal hero extraction, and codec decode.
+- `codec_encode` and `MpqWriter::WriteFile("hero", ...)` for updating the hero payload while preserving other archive entries.
+- `offsetof(PlayerPack, field)` for patch offsets from the upstream packed structure.
 
-The upstream implementation is derived from DevilutionX and carries its own license obligations. Preserve its license notices and review distribution compatibility before shipping the app.
+## Raw-data guarantee
+
+`readHero` returns decoded bytes of packed `PlayerPack` as a `ByteArray`. This is the editing session's raw baseline. `patchField` copies it and changes only a supported field's bytes; all remaining bytes, including reserved and unknown data, are retained. The UI should keep this raw snapshot and patch it rather than rebuild a struct from defaults.
+
+Supported field names: `level`, `class`, `baseStrength`, `baseMagic`, `baseDexterity`, `baseVitality`, `statPoints`, `experience`, `gold`, `hpBase`, `maxHpBase`, `manaBase`, `maxManaBase`.
+
+## Build and test notes
+
+The Gradle module invokes CMake and the upstream repo is pinned as a submodule. Initialize it after checkout:
+
+```bash
+git submodule update --init --recursive
+```
+
+The upstream CMake defines a desktop CLI executable in addition to `d1edit`. The Android wrapper excludes the CLI target from the default build and links the library.
+
+This integration has not yet been built with Android NDK or verified against a real `.sv`/`.hsv` in Android runtime. Before release, build supported ABIs and test read → patch → write → reread for single-player, multiplayer, Spawn, and Hellfire saves. Compare untouched raw bytes and write to a backup/copy first.
+
+The C++ code is derived from DevilutionX and has license obligations. Retain upstream notices and review distribution compatibility.
