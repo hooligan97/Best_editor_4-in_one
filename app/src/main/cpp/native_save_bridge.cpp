@@ -7,6 +7,7 @@
 #include <cstring>
 #include <limits>
 #include <memory>
+#include <mutex>
 #include <stdexcept>
 #include <string>
 
@@ -22,6 +23,9 @@ uint32_t gSaveNumber = 0;
 
 namespace {
 using namespace devilution;
+
+// The upstream save core stores game flags in globals; serialize JNI archive operations.
+std::mutex gSaveCoreMutex;
 
 class UtfChars {
 public:
@@ -78,6 +82,7 @@ Java_com_example_data_parser_NativeSaveBridge_readHero(
     UtfChars path(env, savePath);
     if (path.get() == nullptr) return nullptr;
     try {
+        std::lock_guard<std::mutex> saveCoreLock(gSaveCoreMutex);
         ConfigureGameFlags(multiplayer == JNI_TRUE, spawn == JNI_TRUE, IsHellfirePath(path.get()));
         int32_t error = 0;
         auto archive = MpqArchive::Open(path.get(), error);
@@ -112,6 +117,7 @@ Java_com_example_data_parser_NativeSaveBridge_patchField(
 {
     if (rawHero == nullptr || fieldName == nullptr) return nullptr;
     try {
+        std::lock_guard<std::mutex> saveCoreLock(gSaveCoreMutex);
         const jsize size = env->GetArrayLength(rawHero);
         if (size != static_cast<jsize>(sizeof(PlayerPack))) {
             ThrowJava(env, "java/lang/IllegalArgumentException", "Raw payload size mismatch.");

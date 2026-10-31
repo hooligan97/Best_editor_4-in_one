@@ -1,6 +1,7 @@
 package com.example.ui.util
 
 import android.net.Uri
+import java.io.IOException
 import androidx.activity.compose.ManagedActivityResultLauncher
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -27,9 +28,22 @@ fun rememberSaveFilePicker(
     ) { uri ->
         uri?.let {
             runCatching {
-                context.contentResolver.openInputStream(it)?.use { stream ->
-                    val bytes = stream.readBytes()
-                    // Attempt to resolve filename from URI (may be fallback)
+                val input = context.contentResolver.openInputStream(it)
+                    ?: throw IOException("Nie można otworzyć wybranego pliku.")
+                input.use { stream ->
+                    // Bound memory use for malformed or unexpectedly large input files.
+                    val maxBytes = 64 * 1024 * 1024
+                    val output = java.io.ByteArrayOutputStream()
+                    val buffer = ByteArray(8 * 1024)
+                    var total = 0
+                    while (true) {
+                        val count = stream.read(buffer)
+                        if (count < 0) break
+                        total += count
+                        if (total > maxBytes) throw IOException("Plik przekracza limit 64 MiB.")
+                        output.write(buffer, 0, count)
+                    }
+                    val bytes = output.toByteArray()
                     val filename = it.lastPathSegment ?: "save.sv"
                     onFileSelected(bytes, filename)
                 }
