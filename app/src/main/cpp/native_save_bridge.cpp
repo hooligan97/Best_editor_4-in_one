@@ -169,6 +169,9 @@ Java_com_example_data_parser_NativeSaveBridge_writeHero(
     UtfChars path(env, savePath);
     if (path.get() == nullptr || rawHero == nullptr) return;
     try {
+        // All save-core operations must be serialized: the upstream codec and
+        // game flags use process-global state shared with readHero().
+        std::lock_guard<std::mutex> saveCoreLock(gSaveCoreMutex);
         const jsize size = env->GetArrayLength(rawHero);
         if (size != static_cast<jsize>(sizeof(PlayerPack))) {
             ThrowJava(env, "java/lang/IllegalArgumentException", "Raw payload size mismatch.");
