@@ -13,7 +13,7 @@ object NativeSaveBridge {
     }
 
     @JvmStatic
-    external fun readHero(savePath: String, multiplayer: Boolean, spawn: Boolean): ByteArray
+    external fun readHero(savePath: String, isMultiplayer: Boolean, isSpawn: Boolean, isHellfire: Boolean, isHellfireSaveGame: Boolean): ByteArray
 
     @JvmStatic
     external fun patchField(rawHero: ByteArray, fieldName: String, value: Long): ByteArray

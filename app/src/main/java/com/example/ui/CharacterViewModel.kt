@@ -1,6 +1,7 @@
 package com.example.ui
 
 import androidx.lifecycle.ViewModel
+import android.util.Log
 import com.example.data.model.*
 import com.example.data.parser.*
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -31,6 +32,7 @@ class CharacterViewModel : ViewModel() {
 
     private val _character = MutableStateFlow(HeroCharacter.createGodly(HeroClass.WARRIOR, "Aidan"))
     private var importedOriginalSave: ByteArray? = null
+    private var importedRawHero: ByteArray? = null
     val character: StateFlow<HeroCharacter> = _character.asStateFlow()
 
     private val _activeTab = MutableStateFlow(EditorTab.HERO)
