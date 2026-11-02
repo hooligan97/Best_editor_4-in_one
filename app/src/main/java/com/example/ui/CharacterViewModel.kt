@@ -359,6 +359,7 @@ class CharacterViewModel : ViewModel() {
 
     
     fun importSaveBytes(bytes: ByteArray, filename: String): Boolean {
+        Log.d("D1SaveBridge", "Importing save: $filename, size: ${bytes.size}")
         var stagedArchive: File? = null
         return try {
             val extension = if (filename.endsWith(".${SaveConstants.HELLFIRE_EXTENSION}", ignoreCase = true)) SaveConstants.HELLFIRE_EXTENSION else SaveConstants.STANDARD_EXTENSION
@@ -366,7 +367,9 @@ class CharacterViewModel : ViewModel() {
             stagedArchive.writeBytes(bytes)
             val isMultiplayer = filename.startsWith(SaveConstants.MULTIPLAYER_PREFIX, ignoreCase = true)
             val isHellfire = extension == SaveConstants.HELLFIRE_EXTENSION
+            Log.d("D1SaveBridge", "Calling NativeSaveBridge.readHero")
             val rawHero = NativeSaveBridge.readHero(stagedArchive.absolutePath, isMultiplayer, false, isHellfire, isHellfire)
+            Log.d("D1SaveBridge", "NativeSaveBridge.readHero returned: ${rawHero?.size ?: "null"}")
             if (rawHero != null && rawHero.isNotEmpty()) {
                 importedOriginalSave = bytes.copyOf()
                 importedRawHero = rawHero.copyOf()
