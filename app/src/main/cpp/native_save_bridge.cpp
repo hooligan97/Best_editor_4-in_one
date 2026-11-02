@@ -76,15 +76,20 @@ void Patch(std::byte *raw, size_t offset, int64_t value)
 }
 } // namespace
 
+// Define minimum size for stats reading - approximately up to pMaxManaBase (offsetof + sizeof)
+constexpr size_t MIN_VKDMOD_SIZE = 120;
+
 extern "C" JNIEXPORT jbyteArray JNICALL
 Java_com_example_data_parser_NativeSaveBridge_readHero(
-    JNIEnv *env, jclass, jstring savePath, jboolean multiplayer, jboolean spawn)
+    JNIEnv *env, jclass, jstring savePath, jboolean multiplayer, jboolean spawn, jboolean hellfire, jboolean hellfireSaveGame)
 {
     UtfChars path(env, savePath);
     if (path.get() == nullptr) return nullptr;
     try {
         std::lock_guard<std::mutex> saveCoreLock(gSaveCoreMutex);
-        ConfigureGameFlags(multiplayer == JNI_TRUE, spawn == JNI_TRUE, IsHellfirePath(path.get()));
+        ConfigureGameFlags(multiplayer == JNI_TRUE, spawn == JNI_TRUE, hellfire == JNI_TRUE);
+        gbIsHellfireSaveGame = hellfireSaveGame == JNI_TRUE;
+
         int32_t error = 0;
         auto archive = MpqArchive::Open(path.get(), error);
         if (!archive) {
@@ -94,12 +99,19 @@ Java_com_example_data_parser_NativeSaveBridge_readHero(
         }
         size_t size = 0;
         auto payload = ReadArchive(*archive, "hero", &size);
-        if (!payload || size != sizeof(PlayerPack)) {
-            std::string errMsg = "Invalid hero payload. Actual size: " + std::to_string(size) + ", Expected size: " + std::to_string(sizeof(PlayerPack));
-            __android_log_print(ANDROID_LOG_ERROR, "D1SaveBridge", "%s", errMsg.c_str());
-            ThrowJava(env, "java/lang/IllegalStateException", errMsg);
-            return nullptr;
+
+        // Relaxed validation for VKDMod or potentially other modified saves
+        bool isLikelyModified = (size != sizeof(PlayerPack));
+        if (!payload || (size < sizeof(PlayerPack) && size < MIN_VKDMOD_SIZE)) {
+            if (isLikelyModified) {
+                std::string errMsg = "Invalid hero payload. Actual size: " + std::to_string(size) + ", Expected size: " + std::to_string(sizeof(PlayerPack));
+                __android_log_print(ANDROID_LOG_ERROR, "D1SaveBridge", "%s", errMsg.c_str());
+                ThrowJava(env, "java/lang/IllegalStateException", errMsg);
+                return nullptr;
+            }
         }
+        // ... rest of the function ...
+
         jbyteArray result = env->NewByteArray(static_cast<jsize>(size));
         if (result != nullptr)
             env->SetByteArrayRegion(result, 0, static_cast<jsize>(size),
