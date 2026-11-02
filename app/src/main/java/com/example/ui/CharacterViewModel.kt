@@ -375,9 +375,16 @@ class CharacterViewModel : ViewModel() {
                 importedRawHero = rawHero.copyOf()
                 val parsedHero = parseNativePlayerPack(rawHero)
                 _character.value = parsedHero
+                showMessage("Successfully imported $filename")
                 true
-            } else { false }
-        } catch (e: Exception) { Log.e("D1", "Err: ${e.message}"); false
+            } else {
+                showMessage("Import failed: No hero data found")
+                false
+            }
+        } catch (e: Exception) {
+            Log.e("D1", "Err: ${e.message}", e)
+            showMessage("Import error: ${e.message}")
+            false
         } finally { stagedArchive?.delete() }
     }
     private fun parseNativePlayerPack(raw: ByteArray): HeroCharacter {
