@@ -51,10 +51,13 @@ class SaveFileService {
         stagedArchive.writeBytes(originalBytes)
 
         try {
+            val isHellfire = hero.gameMod == com.example.data.model.GameMod.HELLFIRE
             var rawHero = NativeSaveBridge.readHero(
                 stagedArchive.absolutePath,
                 hero.isMultiplayer,
                 false,
+                isHellfire,
+                isHellfire
             )
             fun patch(field: String, value: Long) {
                 rawHero = NativeSaveBridge.patchField(rawHero, field, value)
