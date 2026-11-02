@@ -1,6 +1,8 @@
 package com.example.ui.util
 
+import android.content.Context
 import android.net.Uri
+import android.provider.OpenableColumns
 import java.io.IOException
 import androidx.activity.compose.ManagedActivityResultLauncher
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -8,14 +10,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 
-/**
- * A utility Composable that provides a launcher for picking .sv or .json save files
- * using the Android Storage Access Framework (SAF).
- *
- * @param onFileSelected Callback triggered when a file is successfully picked and read.
- * @param onError Callback triggered if file reading fails.
- * @return The ActivityResultLauncher to be called with launch(arrayOf("application/octet-stream", "application/json"))
- */
 @Composable
 fun rememberSaveFilePicker(
     onFileSelected: (bytes: ByteArray, filename: String) -> Unit,
@@ -31,7 +25,6 @@ fun rememberSaveFilePicker(
                 val input = context.contentResolver.openInputStream(it)
                     ?: throw IOException("Nie można otworzyć wybranego pliku.")
                 input.use { stream ->
-                    // Bound memory use for malformed or unexpectedly large input files.
                     val maxBytes = 64 * 1024 * 1024
                     val output = java.io.ByteArrayOutputStream()
                     val buffer = ByteArray(8 * 1024)
@@ -44,7 +37,7 @@ fun rememberSaveFilePicker(
                         output.write(buffer, 0, count)
                     }
                     val bytes = output.toByteArray()
-                    val filename = it.lastPathSegment ?: "save.sv"
+                    val filename = resolveDisplayName(context, it)
                     onFileSelected(bytes, filename)
                 }
             }.onFailure { e ->
@@ -52,4 +45,17 @@ fun rememberSaveFilePicker(
             }
         }
     }
+}
+
+private fun resolveDisplayName(context: Context, uri: Uri): String {
+    context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+        if (cursor.moveToFirst()) {
+            val idx = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+            if (idx >= 0) {
+                val name = cursor.getString(idx)
+                if (!name.isNullOrBlank()) return name
+            }
+        }
+    }
+    return uri.lastPathSegment?.substringAfterLast(':')?.substringAfterLast('/') ?: "save.sv"
 }

@@ -101,14 +101,12 @@ Java_com_example_data_parser_NativeSaveBridge_readHero(
         auto payload = ReadArchive(*archive, "hero", &size);
 
         // Relaxed validation for VKDMod or potentially other modified saves
-        bool isLikelyModified = (size != sizeof(PlayerPack));
-        if (!payload || (size < sizeof(PlayerPack) && size < MIN_VKDMOD_SIZE)) {
-            if (isLikelyModified) {
-                std::string errMsg = "Invalid hero payload. Actual size: " + std::to_string(size) + ", Expected size: " + std::to_string(sizeof(PlayerPack));
-                __android_log_print(ANDROID_LOG_ERROR, "D1SaveBridge", "%s", errMsg.c_str());
-                ThrowJava(env, "java/lang/IllegalStateException", errMsg);
-                return nullptr;
-            }
+        if (!payload || size < 812) { // Użyj wartości minimalnej lub MIN_VKDMOD_SIZE
+            std::string errMsg = "Invalid hero payload. Actual size: " + std::to_string(size) +
+                                 ", Expected size: " + std::to_string(sizeof(PlayerPack));
+            __android_log_print(ANDROID_LOG_ERROR, "D1SaveBridge", "%s", errMsg.c_str());
+            ThrowJava(env, "java/lang/IllegalStateException", errMsg);
+            return nullptr;
         }
         // ... rest of the function ...
 

@@ -362,18 +362,34 @@ class CharacterViewModel : ViewModel() {
         Log.d("D1SaveBridge", "Importing save: $filename, size: ${bytes.size}")
         var stagedArchive: File? = null
         return try {
-            val extension = if (filename.endsWith(".${SaveConstants.HELLFIRE_EXTENSION}", ignoreCase = true)) SaveConstants.HELLFIRE_EXTENSION else SaveConstants.STANDARD_EXTENSION
+            val lower = filename.lowercase()
+            val extension = if (lower.endsWith(".${SaveConstants.HELLFIRE_EXTENSION}")) SaveConstants.HELLFIRE_EXTENSION else SaveConstants.STANDARD_EXTENSION
+
             stagedArchive = File.createTempFile(SaveConstants.TEMP_FILE_PREFIX, ".$extension")
             stagedArchive.writeBytes(bytes)
-            val isMultiplayer = filename.startsWith(SaveConstants.MULTIPLAYER_PREFIX, ignoreCase = true)
-            val isHellfire = extension == SaveConstants.HELLFIRE_EXTENSION
-            Log.d("D1SaveBridge", "Calling NativeSaveBridge.readHero")
-            val rawHero = NativeSaveBridge.readHero(stagedArchive.absolutePath, isMultiplayer, false, isHellfire, isHellfire)
-            Log.d("D1SaveBridge", "NativeSaveBridge.readHero returned: ${rawHero?.size ?: "null"}")
+
+            var isMultiplayer = lower.contains("multi")
+            var isHellfire = extension == SaveConstants.HELLFIRE_EXTENSION || lower.contains("hellfire")
+            var isSpawn = lower.contains("spawn")
+
+            Log.d("D1SaveBridge", "Flags: multi=$isMultiplayer hellfire=$isHellfire spawn=$isSpawn")
+
+            var rawHero = tryReadHero(stagedArchive.absolutePath, isMultiplayer, isSpawn, isHellfire)
+
+            if (rawHero == null || rawHero.isEmpty()) {
+                Log.w("D1SaveBridge", "First attempt failed, retrying with flipped flags")
+                rawHero = tryReadHero(stagedArchive.absolutePath, !isMultiplayer, isSpawn, !isHellfire)
+                if (rawHero != null && rawHero.isNotEmpty()) {
+                    isMultiplayer = !isMultiplayer
+                    isHellfire = !isHellfire
+                }
+            }
+
             if (rawHero != null && rawHero.isNotEmpty()) {
                 importedOriginalSave = bytes.copyOf()
                 importedRawHero = rawHero.copyOf()
-                val parsedHero = parseNativePlayerPack(rawHero)
+                // Upewnij się, że przekazujesz poprawne flagi do parseNativePlayerPack, jeśli ich wymaga
+                val parsedHero = parseNativePlayerPack(rawHero) 
                 _character.value = parsedHero
                 showMessage("Successfully imported $filename")
                 true
@@ -385,7 +401,18 @@ class CharacterViewModel : ViewModel() {
             Log.e("D1", "Err: ${e.message}", e)
             showMessage("Import error: ${e.message}")
             false
-        } finally { stagedArchive?.delete() }
+        } finally {
+            stagedArchive?.delete()
+        }
+    }
+
+    private fun tryReadHero(path: String, multiplayer: Boolean, spawn: Boolean, hellfire: Boolean): ByteArray? {
+        return try {
+            NativeSaveBridge.readHero(path, multiplayer, spawn, hellfire, hellfire)
+        } catch (e: Exception) {
+            Log.w("D1SaveBridge", "readHero failed (multi=$multiplayer hf=$hellfire): ${e.message}")
+            null
+        }
     }
     private fun parseNativePlayerPack(raw: ByteArray): HeroCharacter {
         val buffer = ByteBuffer.wrap(raw).order(ByteOrder.LITTLE_ENDIAN)
