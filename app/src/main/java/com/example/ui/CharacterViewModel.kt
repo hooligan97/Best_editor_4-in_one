@@ -188,6 +188,12 @@ class CharacterViewModel : ViewModel() {
         _character.update { it.copy(dungeonLevel = floor.coerceIn(0, 24)) }
     }
 
+    fun createNewCharacter(heroClass: HeroClass, name: String, mod: GameMod) {
+        val newChar = HeroCharacter.createStarter(heroClass, name).copy(gameMod = mod)
+        _character.value = newChar
+        showMessage("Created new ${heroClass.displayName} for ${mod.displayName}")
+    }
+
     // Stats
     fun modifyStat(stat: String, delta: Int) {
         _character.update { c ->
@@ -210,6 +216,34 @@ class CharacterViewModel : ViewModel() {
                 }
                 "points", "statpoints" -> {
                     val newVal = (c.statPoints + delta).coerceIn(0, 999)
+                    c.copy(statPoints = newVal)
+                }
+                else -> c
+            }
+        }
+    }
+
+    fun setStatValue(stat: String, value: Int) {
+        _character.update { c ->
+            when (stat.lowercase()) {
+                "strength", "str" -> {
+                    val newVal = value.coerceIn(0, 300)
+                    c.copy(strength = newVal, baseStrength = newVal)
+                }
+                "magic", "mag" -> {
+                    val newVal = value.coerceIn(0, 300)
+                    c.copy(magic = newVal, baseMagic = newVal)
+                }
+                "dexterity", "dex" -> {
+                    val newVal = value.coerceIn(0, 300)
+                    c.copy(dexterity = newVal, baseDexterity = newVal)
+                }
+                "vitality", "vit" -> {
+                    val newVal = value.coerceIn(0, 300)
+                    c.copy(vitality = newVal, baseVitality = newVal)
+                }
+                "points", "statpoints" -> {
+                    val newVal = value.coerceIn(0, 999)
                     c.copy(statPoints = newVal)
                 }
                 else -> c

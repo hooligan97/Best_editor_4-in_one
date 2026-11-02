@@ -53,9 +53,9 @@ fun HomeScreen(
                     Text("Szybkie statystyki", color = DemonicGoldBright,
                         fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(12.dp))
-                    StatAdjustRow("Siła", hero.strength) { viewModel.modifyStat("strength", it) }
-                    StatAdjustRow("Zręczność", hero.dexterity) { viewModel.modifyStat("dexterity", it) }
-                    StatAdjustRow("Witalność", hero.vitality) { viewModel.modifyStat("vitality", it) }
+                    StatEditRow("Siła", hero.strength) { viewModel.setStatValue("strength", it) }
+                    StatEditRow("Zręczność", hero.dexterity) { viewModel.setStatValue("dexterity", it) }
+                    StatEditRow("Witalność", hero.vitality) { viewModel.setStatValue("vitality", it) }
                 }
             }
         }
@@ -68,18 +68,22 @@ fun HomeScreen(
 }
 
 @Composable
-private fun StatAdjustRow(label: String, value: Int, onAdjust: (Int) -> Unit) {
+private fun StatEditRow(label: String, value: Int, onValueChange: (Int) -> Unit) {
+    var text by remember(value) { androidx.compose.runtime.mutableStateOf(value.toString()) }
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(label, modifier = Modifier.weight(1f), color = NormalWhite)
-        IconButton(onClick = { onAdjust(-1) }, enabled = value > 0) {
-            Icon(Icons.Default.Remove, contentDescription = "Zmniejsz $label")
-        }
-        Text(value.toString(), color = NormalWhite, fontWeight = FontWeight.SemiBold)
-        IconButton(onClick = { onAdjust(1) }) {
-            Icon(Icons.Default.Add, contentDescription = "Zwiększ $label")
-        }
+        OutlinedTextField(
+            value = text,
+            onValueChange = {
+                text = it
+                it.toIntOrNull()?.let { newValue -> onValueChange(newValue) }
+            },
+            modifier = Modifier.width(80.dp),
+            singleLine = true,
+            textStyle = androidx.compose.ui.text.TextStyle(color = NormalWhite)
+        )
     }
 }
