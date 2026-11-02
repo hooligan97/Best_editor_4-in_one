@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import android.util.Log
 import com.example.data.model.*
 import com.example.data.parser.*
+import com.example.data.parser.SaveConstants
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -360,11 +361,11 @@ class CharacterViewModel : ViewModel() {
     fun importSaveBytes(bytes: ByteArray, filename: String): Boolean {
         var stagedArchive: File? = null
         return try {
-            val extension = if (filename.endsWith(".hsv", ignoreCase = true)) "hsv" else "sv"
-            stagedArchive = File.createTempFile("d1-native-import-", ".$extension")
+            val extension = if (filename.endsWith(".${SaveConstants.HELLFIRE_EXTENSION}", ignoreCase = true)) SaveConstants.HELLFIRE_EXTENSION else SaveConstants.STANDARD_EXTENSION
+            stagedArchive = File.createTempFile(SaveConstants.TEMP_FILE_PREFIX, ".$extension")
             stagedArchive.writeBytes(bytes)
-            val isMultiplayer = filename.startsWith("multi_", ignoreCase = true)
-            val isHellfire = extension == "hsv"
+            val isMultiplayer = filename.startsWith(SaveConstants.MULTIPLAYER_PREFIX, ignoreCase = true)
+            val isHellfire = extension == SaveConstants.HELLFIRE_EXTENSION
             val rawHero = NativeSaveBridge.readHero(stagedArchive.absolutePath, isMultiplayer, false, isHellfire, isHellfire)
             if (rawHero != null && rawHero.isNotEmpty()) {
                 importedOriginalSave = bytes.copyOf()
@@ -389,10 +390,10 @@ class CharacterViewModel : ViewModel() {
         buffer.get() // statPoints
         val experience = buffer.getInt().toLong() and 0xFFFFFFFFL
         val gold = buffer.getInt().toLong().coerceAtLeast(0)
-        val hp = (buffer.getInt() / 64).coerceAtLeast(1)
-        val maxHp = (buffer.getInt() / 64).coerceAtLeast(1)
-        val mana = (buffer.getInt() / 64).coerceAtLeast(0)
-        val maxMana = (buffer.getInt() / 64).coerceAtLeast(0)
+        val hp = (buffer.getInt() / SaveConstants.HP_MANA_SCALE_FACTOR).coerceAtLeast(1)
+        val maxHp = (buffer.getInt() / SaveConstants.HP_MANA_SCALE_FACTOR).coerceAtLeast(1)
+        val mana = (buffer.getInt() / SaveConstants.HP_MANA_SCALE_FACTOR).coerceAtLeast(0)
+        val maxMana = (buffer.getInt() / SaveConstants.HP_MANA_SCALE_FACTOR).coerceAtLeast(0)
         return _character.value.copy(
             name = if (parsedName.isBlank()) "Bezimienny" else parsedName,
             heroClass = try { HeroClass.fromIndex(classIndex) } catch (e: Exception) { HeroClass.WARRIOR },

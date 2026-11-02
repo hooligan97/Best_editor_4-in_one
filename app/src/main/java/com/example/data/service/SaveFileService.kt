@@ -5,6 +5,7 @@ import com.example.data.parser.DevilutionXSaveParser
 import com.example.data.parser.MpqHeaderInfo
 import com.example.data.parser.MpqTool
 import com.example.data.parser.NativeSaveBridge
+import com.example.data.parser.SaveConstants
 import java.io.File
 import java.util.UUID
 
@@ -44,8 +45,8 @@ class SaveFileService {
         }
 
         val id = UUID.randomUUID().toString()
-        val extension = if (hero.gameMod == com.example.data.model.GameMod.HELLFIRE) "hsv" else "sv"
-        val stagedArchive = File(backupDirectory, "native-stage-$id.$extension")
+        val extension = if (hero.gameMod == com.example.data.model.GameMod.HELLFIRE) SaveConstants.HELLFIRE_EXTENSION else SaveConstants.STANDARD_EXTENSION
+        val stagedArchive = File(backupDirectory, "${SaveConstants.TEMP_FILE_PREFIX.replace("-", "_")}$id.$extension")
         val backupFile = File(backupDirectory, "native-backup-$id.bak")
         backupFile.writeBytes(originalBytes)
         stagedArchive.writeBytes(originalBytes)
@@ -72,10 +73,10 @@ class SaveFileService {
             patch("statPoints", hero.statPoints.toLong())
             patch("experience", hero.experience)
             patch("gold", hero.gold)
-            patch("hpBase", hero.baseLife.toLong() * 64L)
-            patch("maxHpBase", hero.maxLife.toLong() * 64L)
-            patch("manaBase", hero.baseMana.toLong() * 64L)
-            patch("maxManaBase", hero.maxMana.toLong() * 64L)
+            patch("hpBase", hero.baseLife.toLong() * SaveConstants.HP_MANA_SCALE_FACTOR)
+            patch("maxHpBase", hero.maxLife.toLong() * SaveConstants.HP_MANA_SCALE_FACTOR)
+            patch("manaBase", hero.baseMana.toLong() * SaveConstants.HP_MANA_SCALE_FACTOR)
+            patch("maxManaBase", hero.maxMana.toLong() * SaveConstants.HP_MANA_SCALE_FACTOR)
 
             NativeSaveBridge.writeHero(
                 stagedArchive.absolutePath,

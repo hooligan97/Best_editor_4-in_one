@@ -42,6 +42,7 @@ GitHub Actions buduje APK na push do main oraz pull request do main. Po pushu do
 
 ## Znane problemy
 
+- Edycja ekwipunku i czarów nie jest jeszcze zmapowana w tej wersji.
 - Brakuje pełnego zestawu testów round-trip na reprezentatywnych prawdziwych plikach .sv i .hsv z różnymi wersjami/modami.
 - Zapis natywny wymaga walidacji na prawdziwych plikach i w grze; obecne mapowanie obejmuje tylko wymienione wyżej pola.
 - Nie wszystkie alternatywne parsery Kotlinowe obsługują pełne struktury MPQ.
