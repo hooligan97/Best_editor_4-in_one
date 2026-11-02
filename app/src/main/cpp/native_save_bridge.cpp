@@ -95,9 +95,9 @@ Java_com_example_data_parser_NativeSaveBridge_readHero(
         size_t size = 0;
         auto payload = ReadArchive(*archive, "hero", &size);
         if (!payload || size != sizeof(PlayerPack)) {
-            __android_log_print(ANDROID_LOG_ERROR, "D1SaveBridge", "Size mismatch! Actual: %zu, Expected: %zu", size, sizeof(PlayerPack));
-            ThrowJava(env, "java/lang/IllegalStateException",
-                      "Invalid hero payload or unsupported PlayerPack size.");
+            std::string errMsg = "Invalid hero payload. Actual size: " + std::to_string(size) + ", Expected size: " + std::to_string(sizeof(PlayerPack));
+            __android_log_print(ANDROID_LOG_ERROR, "D1SaveBridge", "%s", errMsg.c_str());
+            ThrowJava(env, "java/lang/IllegalStateException", errMsg);
             return nullptr;
         }
         jbyteArray result = env->NewByteArray(static_cast<jsize>(size));
