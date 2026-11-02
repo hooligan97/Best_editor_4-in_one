@@ -40,6 +40,15 @@ GitHub Actions buduje APK na push do main oraz pull request do main. Po pushu do
 5. Zaktualizuj parser/serializer, dokumentację i testy jednostkowe.
 6. Zachowuj nieznane/zarezerwowane bajty. Nie modyfikuj oryginalnego pliku bez kopii.
 
+## Postępy (Gałąź feature/native-save-bridge)
+
+W tej sesji wykonano gruntowny remont mechanizmu komunikacji z natywnym parserem C++:
+- **Stabilizacja JNI**: Pełna synchronizacja flag (Multiplayer, Hellfire, Spawn) między Kotlinem a C++.
+- **Robust Import**: Mechanizm automatycznego ponawiania prób odczytu przy błędnych flagach oraz obsługa specyficznych rozmiarów plików z modów (np. VKDMod).
+- **Poprawa SAF**: Prawidłowe pobieranie nazw plików (DISPLAY_NAME) z systemowego pickera Androida.
+- **Diagnostyka**: Rozbudowane logowanie błędów w UI i konsoli systemowej dla łatwiejszego rozwiązywania problemów z formatami plików.
+- **Architektura**: Centralizacja stałych i parametrów technicznych zapisu w `SaveConstants`.
+
 ## Znane problemy
 
 - Edycja ekwipunku i czarów nie jest jeszcze zmapowana w tej wersji.

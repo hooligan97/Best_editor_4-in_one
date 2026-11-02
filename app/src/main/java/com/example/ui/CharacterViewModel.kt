@@ -402,8 +402,8 @@ class CharacterViewModel : ViewModel() {
             stagedArchive = File.createTempFile(SaveConstants.TEMP_FILE_PREFIX, ".$extension")
             stagedArchive.writeBytes(bytes)
 
-            var isMultiplayer = lower.contains("multi")
-            var isHellfire = extension == SaveConstants.HELLFIRE_EXTENSION || lower.contains("hellfire")
+            var isMultiplayer = lower.contains("multi") || lower.contains(SaveConstants.MULTIPLAYER_PREFIX.replace("_", ""))
+            var isHellfire = extension == SaveConstants.HELLFIRE_EXTENSION || lower.contains("hellfire") || lower.contains("hf")
             var isSpawn = lower.contains("spawn")
 
             Log.d("D1SaveBridge", "Flags: multi=$isMultiplayer hellfire=$isHellfire spawn=$isSpawn")
@@ -422,8 +422,10 @@ class CharacterViewModel : ViewModel() {
             if (rawHero != null && rawHero.isNotEmpty()) {
                 importedOriginalSave = bytes.copyOf()
                 importedRawHero = rawHero.copyOf()
-                // Upewnij się, że przekazujesz poprawne flagi do parseNativePlayerPack, jeśli ich wymaga
-                val parsedHero = parseNativePlayerPack(rawHero) 
+                val parsedHero = parseNativePlayerPack(rawHero).copy(
+                    isMultiplayer = isMultiplayer,
+                    gameMod = if (isHellfire) GameMod.HELLFIRE else _character.value.gameMod
+                ) 
                 _character.value = parsedHero
                 showMessage("Successfully imported $filename")
                 true

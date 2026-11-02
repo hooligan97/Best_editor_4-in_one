@@ -77,7 +77,7 @@ void Patch(std::byte *raw, size_t offset, int64_t value)
 } // namespace
 
 // Define minimum size for stats reading - approximately up to pMaxManaBase (offsetof + sizeof)
-constexpr size_t MIN_VKDMOD_SIZE = 120;
+constexpr size_t MIN_SAVE_SIZE = 812;
 
 extern "C" JNIEXPORT jbyteArray JNICALL
 Java_com_example_data_parser_NativeSaveBridge_readHero(
@@ -101,7 +101,7 @@ Java_com_example_data_parser_NativeSaveBridge_readHero(
         auto payload = ReadArchive(*archive, "hero", &size);
 
         // Relaxed validation for VKDMod or potentially other modified saves
-        if (!payload || size < 812) { // Użyj wartości minimalnej lub MIN_VKDMOD_SIZE
+        if (!payload || size < MIN_SAVE_SIZE) { // Użyj wartości minimalnej lub MIN_VKDMOD_SIZE
             std::string errMsg = "Invalid hero payload. Actual size: " + std::to_string(size) +
                                  ", Expected size: " + std::to_string(sizeof(PlayerPack));
             __android_log_print(ANDROID_LOG_ERROR, "D1SaveBridge", "%s", errMsg.c_str());
@@ -131,8 +131,8 @@ Java_com_example_data_parser_NativeSaveBridge_patchField(
     try {
         std::lock_guard<std::mutex> saveCoreLock(gSaveCoreMutex);
         const jsize size = env->GetArrayLength(rawHero);
-        if (size != static_cast<jsize>(sizeof(PlayerPack))) {
-            ThrowJava(env, "java/lang/IllegalArgumentException", "Raw payload size mismatch.");
+        if (size < MIN_SAVE_SIZE) {
+            ThrowJava(env, "java/lang/IllegalArgumentException", "Raw payload size too small.");
             return nullptr;
         }
         auto bytes = std::make_unique<std::byte[]>(static_cast<size_t>(size));
@@ -185,8 +185,8 @@ Java_com_example_data_parser_NativeSaveBridge_writeHero(
         // game flags use process-global state shared with readHero().
         std::lock_guard<std::mutex> saveCoreLock(gSaveCoreMutex);
         const jsize size = env->GetArrayLength(rawHero);
-        if (size != static_cast<jsize>(sizeof(PlayerPack))) {
-            ThrowJava(env, "java/lang/IllegalArgumentException", "Raw payload size mismatch.");
+        if (size < MIN_SAVE_SIZE) {
+            ThrowJava(env, "java/lang/IllegalArgumentException", "Raw payload size too small.");
             return;
         }
         ConfigureGameFlags(multiplayer == JNI_TRUE, spawn == JNI_TRUE, hellfire == JNI_TRUE);
