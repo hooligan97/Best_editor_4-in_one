@@ -3,6 +3,7 @@
 
 #include "pfile.h"
 #include "codec.h"
+#include <android/log.h>
 
 namespace devilution {
 
@@ -20,9 +21,14 @@ constexpr const char *PASSWORD_MULTI = "szqnlsk1";
 
 const char *pfile_get_password()
 {
+    const char* pwd = nullptr;
     if (gbIsSpawn)
-        return gbIsMultiplayer ? PASSWORD_SPAWN_MULTI : PASSWORD_SPAWN_SINGLE;
-    return gbIsMultiplayer ? PASSWORD_MULTI : PASSWORD_SINGLE;
+        pwd = gbIsMultiplayer ? PASSWORD_SPAWN_MULTI : PASSWORD_SPAWN_SINGLE;
+    else
+        pwd = gbIsMultiplayer ? PASSWORD_MULTI : PASSWORD_SINGLE;
+    
+    __android_log_print(ANDROID_LOG_INFO, "D1SaveBridge", "Using password: %s (Multi: %d, Spawn: %d)", pwd, gbIsMultiplayer, gbIsSpawn);
+    return pwd;
 }
 
 std::unique_ptr<std::byte[]> ReadArchive(MpqArchive &archive, const char *pszName, size_t *pdwLen)
