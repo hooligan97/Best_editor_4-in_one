@@ -35,4 +35,4 @@ add_library(d1savebridge SHARED native_save_bridge.cpp)
 target_include_directories(d1savebridge PRIVATE
     "${UPSTREAM_SAVE_CORE}/src"
     "${UPSTREAM_SAVE_CORE}/3p/PKWare")
-target_link_libraries(d1savebridge PRIVATE d1edit)
+target_link_libraries(d1savebridge PRIVATE d1edit log)

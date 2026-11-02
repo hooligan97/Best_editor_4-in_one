@@ -36,6 +36,7 @@ target_link_libraries(d1edit
         libmpq
         ZLIB::ZLIB
         BZip2::BZip2
+        log
 )
 
 add_executable(editor src/editor.cpp)
