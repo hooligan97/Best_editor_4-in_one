@@ -6,14 +6,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+
 import com.example.ui.CharacterViewModel
 import com.example.ui.theme.DemonicGoldBright
 import com.example.ui.theme.DiabloSurface
@@ -69,7 +69,7 @@ fun HomeScreen(
 
 @Composable
 private fun StatEditRow(label: String, value: Int, onValueChange: (Int) -> Unit) {
-    var text by remember(value) { androidx.compose.runtime.mutableStateOf(value.toString()) }
+    var text by remember(value) { mutableStateOf(value.toString()) }
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -83,7 +83,7 @@ private fun StatEditRow(label: String, value: Int, onValueChange: (Int) -> Unit)
             },
             modifier = Modifier.width(80.dp),
             singleLine = true,
-            textStyle = androidx.compose.ui.text.TextStyle(color = NormalWhite)
+            textStyle = TextStyle(color = NormalWhite)
         )
     }
 }
