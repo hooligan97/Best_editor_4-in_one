@@ -451,34 +451,57 @@ class CharacterViewModel : ViewModel() {
         }
     }
     private fun parseNativePlayerPack(raw: ByteArray): HeroCharacter {
-        // Sprawdzamy, czy bufor na pewno ma odpowiedni rozmiar
+        // Odczytujemy do maxManaBase: bajty 75–78.
         check(raw.size >= 79) {
-            "PlayerPack payload too small: ${raw.size} bytes; expected at least 79"
+            "PlayerPack payload too small: ${raw.size} bytes; expected at least 79."
         }
 
         val buffer = ByteBuffer.wrap(raw).order(ByteOrder.LITTLE_ENDIAN)
-        
+
         val nameBytes = ByteArray(32)
-        buffer.get(nameBytes, 0, 32)
-        val parsedName = String(nameBytes).substringBefore('\u0000').trim()
-        
-        val classIndex = buffer.get().toInt() and 0xFF
-        val heroClass = try { HeroClass.fromIndex(classIndex) } catch (e: Exception) { HeroClass.WARRIOR }
-        
-        val baseStrength = buffer.get().toInt() and 0xFF
-        val baseMagic = buffer.get().toInt() and 0xFF
-        val baseDexterity = buffer.get().toInt() and 0xFF
-        val baseVitality = buffer.get().toInt() and 0xFF
-        val level = buffer.get().toInt() and 0xFF
-        val statPoints = buffer.get().toInt() and 0xFF
-        
-        val experience = buffer.getInt().toLong() and 0xFFFFFFFFL
-        val gold = buffer.getInt().toLong().coerceAtLeast(0)
-        
-        val currentHp = (buffer.getInt() / SaveConstants.HP_MANA_SCALE_FACTOR).coerceAtLeast(1)
-        val maxHp = (buffer.getInt() / SaveConstants.HP_MANA_SCALE_FACTOR).coerceAtLeast(1)
-        val currentMana = (buffer.getInt() / SaveConstants.HP_MANA_SCALE_FACTOR).coerceAtLeast(0)
-        val maxMana = (buffer.getInt() / SaveConstants.HP_MANA_SCALE_FACTOR).coerceAtLeast(0)
+        for (i in nameBytes.indices) {
+            nameBytes[i] = buffer.get(0x10 + i)
+        }
+        val parsedName = String(nameBytes, Charsets.UTF_8)
+            .substringBefore('\u0000')
+            .trim()
+
+        val classIndex = buffer.get(0x30).toInt() and 0xFF
+        val heroClass = when (classIndex) {
+            0 -> HeroClass.WARRIOR
+            1 -> HeroClass.ROGUE
+            2 -> HeroClass.SORCERER
+            3 -> HeroClass.MONK
+            else -> throw IllegalStateException(
+                "Unknown PlayerPack class index: $classIndex"
+            )
+        }
+
+        val baseStrength = buffer.get(0x31).toInt() and 0xFF
+        val baseMagic = buffer.get(0x32).toInt() and 0xFF
+        val baseDexterity = buffer.get(0x33).toInt() and 0xFF
+        val baseVitality = buffer.get(0x34).toInt() and 0xFF
+        val level = buffer.get(0x35).toInt() and 0xFF
+        val statPoints = buffer.get(0x36).toInt() and 0xFF
+
+        val experience = buffer.getInt(0x37).toLong() and 0xFFFF_FFFFL
+
+        // pGold jest int32_t w strukturze. Maskowanie zachowuje wartości uint32,
+        // np. 14 000 000, nawet gdy inna wersja/mod zapisuje je ze znakiem.
+        val gold = buffer.getInt(0x3B).toLong() and 0xFFFF_FFFFL
+
+        val currentHp = (
+            buffer.getInt(0x3F) / SaveConstants.HP_MANA_SCALE_FACTOR
+        ).coerceAtLeast(1)
+        val maxHp = (
+            buffer.getInt(0x43) / SaveConstants.HP_MANA_SCALE_FACTOR
+        ).coerceAtLeast(1)
+        val currentMana = (
+            buffer.getInt(0x47) / SaveConstants.HP_MANA_SCALE_FACTOR
+        ).coerceAtLeast(0)
+        val maxMana = (
+            buffer.getInt(0x4B) / SaveConstants.HP_MANA_SCALE_FACTOR
+        ).coerceAtLeast(0)
 
         return _character.value.copy(
             name = if (parsedName.isBlank()) "Bezimienny" else parsedName,
@@ -487,12 +510,20 @@ class CharacterViewModel : ViewModel() {
             experience = experience,
             gold = gold,
             statPoints = statPoints,
-            baseStrength = baseStrength, strength = baseStrength,
-            baseMagic = baseMagic, magic = baseMagic,
-            baseDexterity = baseDexterity, dexterity = baseDexterity,
-            baseVitality = baseVitality, vitality = baseVitality,
-            life = currentHp, maxLife = maxHp, baseLife = maxHp,
-            mana = currentMana, maxMana = maxMana, baseMana = maxMana
+            baseStrength = baseStrength,
+            strength = baseStrength,
+            baseMagic = baseMagic,
+            magic = baseMagic,
+            baseDexterity = baseDexterity,
+            dexterity = baseDexterity,
+            baseVitality = baseVitality,
+            vitality = baseVitality,
+            life = currentHp,
+            maxLife = maxHp,
+            baseLife = maxHp,
+            mana = currentMana,
+            maxMana = maxMana,
+            baseMana = maxMana
         )
     }
 
