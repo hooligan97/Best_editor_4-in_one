@@ -451,29 +451,48 @@ class CharacterViewModel : ViewModel() {
         }
     }
     private fun parseNativePlayerPack(raw: ByteArray): HeroCharacter {
+        // Sprawdzamy, czy bufor na pewno ma odpowiedni rozmiar
+        check(raw.size >= 79) {
+            "PlayerPack payload too small: ${raw.size} bytes; expected at least 79"
+        }
+
         val buffer = ByteBuffer.wrap(raw).order(ByteOrder.LITTLE_ENDIAN)
-        val nameBytes = ByteArray(32); buffer.get(nameBytes, 0, 32)
+        
+        val nameBytes = ByteArray(32)
+        buffer.get(nameBytes, 0, 32)
         val parsedName = String(nameBytes).substringBefore('\u0000').trim()
+        
         val classIndex = buffer.get().toInt() and 0xFF
-        val baseStr = buffer.get().toInt() and 0xFF
-        val baseMag = buffer.get().toInt() and 0xFF
-        val baseDex = buffer.get().toInt() and 0xFF
-        val baseVit = buffer.get().toInt() and 0xFF
+        val heroClass = try { HeroClass.fromIndex(classIndex) } catch (e: Exception) { HeroClass.WARRIOR }
+        
+        val baseStrength = buffer.get().toInt() and 0xFF
+        val baseMagic = buffer.get().toInt() and 0xFF
+        val baseDexterity = buffer.get().toInt() and 0xFF
+        val baseVitality = buffer.get().toInt() and 0xFF
         val level = buffer.get().toInt() and 0xFF
-        buffer.get() // statPoints
+        val statPoints = buffer.get().toInt() and 0xFF
+        
         val experience = buffer.getInt().toLong() and 0xFFFFFFFFL
         val gold = buffer.getInt().toLong().coerceAtLeast(0)
-        val hp = (buffer.getInt() / SaveConstants.HP_MANA_SCALE_FACTOR).coerceAtLeast(1)
+        
+        val currentHp = (buffer.getInt() / SaveConstants.HP_MANA_SCALE_FACTOR).coerceAtLeast(1)
         val maxHp = (buffer.getInt() / SaveConstants.HP_MANA_SCALE_FACTOR).coerceAtLeast(1)
-        val mana = (buffer.getInt() / SaveConstants.HP_MANA_SCALE_FACTOR).coerceAtLeast(0)
+        val currentMana = (buffer.getInt() / SaveConstants.HP_MANA_SCALE_FACTOR).coerceAtLeast(0)
         val maxMana = (buffer.getInt() / SaveConstants.HP_MANA_SCALE_FACTOR).coerceAtLeast(0)
+
         return _character.value.copy(
             name = if (parsedName.isBlank()) "Bezimienny" else parsedName,
-            heroClass = try { HeroClass.fromIndex(classIndex) } catch (e: Exception) { HeroClass.WARRIOR },
-            level = level, experience = experience, gold = gold,
-            baseStrength = baseStr, strength = baseStr, baseMagic = baseMag, magic = baseMag,
-            baseDexterity = baseDex, dexterity = baseDex, baseVitality = baseVit, vitality = baseVit,
-            life = hp, maxLife = maxHp, baseLife = maxHp, mana = mana, maxMana = maxMana, baseMana = maxMana
+            heroClass = heroClass,
+            level = level,
+            experience = experience,
+            gold = gold,
+            statPoints = statPoints,
+            baseStrength = baseStrength, strength = baseStrength,
+            baseMagic = baseMagic, magic = baseMagic,
+            baseDexterity = baseDexterity, dexterity = baseDexterity,
+            baseVitality = baseVitality, vitality = baseVitality,
+            life = currentHp, maxLife = maxHp, baseLife = maxHp,
+            mana = currentMana, maxMana = maxMana, baseMana = maxMana
         )
     }
 
