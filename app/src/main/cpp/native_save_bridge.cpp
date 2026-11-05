@@ -1,6 +1,7 @@
 #include <jni.h>
 #include <android/log.h>
-
+#include <iostream>
+#include <fstream>
 #include <algorithm>
 #include <cctype>
 #include <cstddef>
@@ -25,9 +26,85 @@ uint32_t gSaveNumber = 0;
 namespace {
 using namespace devilution;
 
-// The upstream save core stores game flags in globals; serialize JNI archive operations.
 std::mutex gSaveCoreMutex;
 
+void LogToFile(const std::string& msg) {
+    // Correct path based on app build.gradle.kts namespace
+    std::ofstream logFile("/storage/emulated/0/Android/data/com.aistudio.applet.quvzzr/files/d1_cpp_log.txt", std::ios::app);
+    if (logFile.is_open()) {
+        logFile << msg << std::endl;
+        logFile.close();
+    }
+}
+// ... (rest of the helper functions)
+
+extern "C" JNIEXPORT jbyteArray JNICALL
+Java_com_example_data_parser_NativeSaveBridge_readHero(
+    JNIEnv *env, jclass, jstring savePath, jboolean multiplayer, jboolean spawn, jboolean hellfire, jboolean hellfireSaveGame)
+{
+    LogToFile("ReadHero: Start");
+    if (env == nullptr || savePath == nullptr) return nullptr;
+
+    UtfChars path(env, savePath);
+    if (path.get() == nullptr) return nullptr;
+    try {
+        std::lock_guard<std::mutex> saveCoreLock(gSaveCoreMutex);
+        LogToFile("ReadHero: Configuring flags");
+        ConfigureGameFlags(multiplayer == JNI_TRUE, spawn == JNI_TRUE, hellfire == JNI_TRUE);
+        gbIsHellfireSaveGame = hellfireSaveGame == JNI_TRUE;
+
+        int32_t error = 0;
+        LogToFile("ReadHero: Opening MPQ");
+        auto archive = MpqArchive::Open(path.get(), error);
+        if (!archive) {
+            LogToFile("ReadHero: Error opening MPQ");
+            ThrowJava(env, "java/lang/IllegalStateException",
+                      std::string("Could not open MPQ archive: ") + MpqArchive::ErrorMessage(error));
+            return nullptr;
+        }
+        size_t size = 0;
+        LogToFile("ReadHero: Reading hero entry");
+        std::unique_ptr<std::byte[]> payload;
+        try {
+            payload = ReadArchive(*archive, "hero", &size);
+        } catch (const std::exception& e) {
+             LogToFile(std::string("WYJĄTEK C++ (ReadArchive): ") + e.what());
+             ThrowJava(env, "java/lang/IllegalStateException", "Could not read hero entry.");
+             return nullptr;
+        }
+
+        if (!payload) {
+             LogToFile("ReadHero: Payload null");
+             ThrowJava(env, "java/lang/IllegalStateException", "Could not read hero entry.");
+             return nullptr;
+        }
+
+        LogToFile("ReadHero: Decoding payload");
+        size = codec_decode(payload.get(), size, pfile_get_password());
+
+        if (size == 0 || size < MIN_SAVE_SIZE) { 
+            std::string errMsg = "Invalid hero payload. Actual size: " + std::to_string(size);
+            LogToFile("ReadHero: " + errMsg);
+            ThrowJava(env, "java/lang/IllegalStateException", errMsg);
+            return nullptr;
+        }
+
+        LogToFile("ReadHero: Returning result");
+        jbyteArray result = env->NewByteArray(static_cast<jsize>(size));
+        if (result != nullptr)
+            env->SetByteArrayRegion(result, 0, static_cast<jsize>(size),
+                                    reinterpret_cast<const jbyte *>(payload.get()));
+        return result;
+    } catch (const std::exception &e) {
+        LogToFile(std::string("WYJĄTEK C++: ") + e.what());
+        ThrowJava(env, "java/lang/IllegalStateException", e.what());
+    } catch (...) {
+        LogToFile("WYJĄTEK C++: Nieznany");
+        ThrowJava(env, "java/lang/IllegalStateException", "Unknown native save read error.");
+    }
+    return nullptr;
+}
+// ... (patchField logic similarly updated)
 class UtfChars {
 public:
     UtfChars(JNIEnv *env, jstring value)
