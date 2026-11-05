@@ -434,11 +434,15 @@ class CharacterViewModel : ViewModel() {
                 false
             }
         } catch (e: Exception) {
-            Log.e("D1", "Err: ${e.message}", e)
-            showMessage("Import error: ${e.message}")
+            Log.e("D1SaveBridge", "Błąd importu: ${e.message}", e)
+            showMessage("Crash caught: ${e.message}")
             false
         } finally {
-            stagedArchive?.delete()
+            try {
+                stagedArchive?.delete()
+            } catch (e: Exception) {
+                Log.e("D1SaveBridge", "Error deleting staged archive", e)
+            }
         }
     }
 

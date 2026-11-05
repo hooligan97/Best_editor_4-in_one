@@ -146,8 +146,9 @@ Java_com_example_data_parser_NativeSaveBridge_patchField(
         if (field.get() == nullptr) return nullptr;
         const std::string name(field.get());
 
-        // Check if value is a ByteArray
-        if (env->IsInstanceOf(value, env->FindClass("([B"))) {
+        // Check for ByteArray
+        jclass byteArrayClass = env->FindClass("[B");
+        if (env->IsInstanceOf(value, byteArrayClass)) {
             jbyteArray valueArray = static_cast<jbyteArray>(value);
             const jsize valueSize = env->GetArrayLength(valueArray);
             auto valueBytes = std::make_unique<uint8_t[]>(static_cast<size_t>(valueSize));
@@ -166,31 +167,37 @@ Java_com_example_data_parser_NativeSaveBridge_patchField(
                 }
                 std::memcpy(reinterpret_cast<uint8_t*>(bytes.get()) + offsetof(PlayerPack, InvList), valueBytes.get(), valueSize);
             } else {
-                ThrowJava(env, "java/lang/IllegalArgumentException", "Unsupported raw PlayerPack field (ByteArray).");
+                ThrowJava(env, "java/lang/IllegalArgumentException", "Unsupported ByteArray field: " + name);
                 return nullptr;
             }
-        } else {
-            // Treat as long for primitive fields
+        } 
+        // Check for Long
+        else {
             jclass longClass = env->FindClass("java/lang/Long");
-            jmethodID longValueMethod = env->GetMethodID(longClass, "longValue", "()J");
-            jlong longValue = env->CallLongMethod(value, longValueMethod);
+            if (env->IsInstanceOf(value, longClass)) {
+                jmethodID longValueMethod = env->GetMethodID(longClass, "longValue", "()J");
+                jlong longValue = env->CallLongMethod(value, longValueMethod);
 
-            if (name == "level") Patch<uint8_t>(bytes.get(), offsetof(PlayerPack, pLevel), longValue);
-            else if (name == "class") Patch<uint8_t>(bytes.get(), offsetof(PlayerPack, pClass), longValue);
-            else if (name == "baseStrength") Patch<uint8_t>(bytes.get(), offsetof(PlayerPack, pBaseStr), longValue);
-            else if (name == "baseMagic") Patch<uint8_t>(bytes.get(), offsetof(PlayerPack, pBaseMag), longValue);
-            else if (name == "baseDexterity") Patch<uint8_t>(bytes.get(), offsetof(PlayerPack, pBaseDex), longValue);
-            else if (name == "baseVitality") Patch<uint8_t>(bytes.get(), offsetof(PlayerPack, pBaseVit), longValue);
-            else if (name == "statPoints") Patch<uint8_t>(bytes.get(), offsetof(PlayerPack, pStatPts), longValue);
-            else if (name == "experience") Patch<uint32_t>(bytes.get(), offsetof(PlayerPack, pExperience), longValue);
-            else if (name == "gold") Patch<int32_t>(bytes.get(), offsetof(PlayerPack, pGold), longValue);
-            else if (name == "hpBase") Patch<int32_t>(bytes.get(), offsetof(PlayerPack, pHPBase), longValue);
-            else if (name == "maxHpBase") Patch<int32_t>(bytes.get(), offsetof(PlayerPack, pMaxHPBase), longValue);
-            else if (name == "manaBase") Patch<int32_t>(bytes.get(), offsetof(PlayerPack, pManaBase), longValue);
-            else if (name == "maxManaBase") Patch<int32_t>(bytes.get(), offsetof(PlayerPack, pMaxManaBase), longValue);
-            else {
-                ThrowJava(env, "java/lang/IllegalArgumentException", "Unsupported raw PlayerPack field.");
-                return nullptr;
+                if (name == "level") Patch<uint8_t>(bytes.get(), offsetof(PlayerPack, pLevel), longValue);
+                else if (name == "class") Patch<uint8_t>(bytes.get(), offsetof(PlayerPack, pClass), longValue);
+                else if (name == "baseStrength") Patch<uint8_t>(bytes.get(), offsetof(PlayerPack, pBaseStr), longValue);
+                else if (name == "baseMagic") Patch<uint8_t>(bytes.get(), offsetof(PlayerPack, pBaseMag), longValue);
+                else if (name == "baseDexterity") Patch<uint8_t>(bytes.get(), offsetof(PlayerPack, pBaseDex), longValue);
+                else if (name == "baseVitality") Patch<uint8_t>(bytes.get(), offsetof(PlayerPack, pBaseVit), longValue);
+                else if (name == "statPoints") Patch<uint8_t>(bytes.get(), offsetof(PlayerPack, pStatPts), longValue);
+                else if (name == "experience") Patch<uint32_t>(bytes.get(), offsetof(PlayerPack, pExperience), longValue);
+                else if (name == "gold") Patch<int32_t>(bytes.get(), offsetof(PlayerPack, pGold), longValue);
+                else if (name == "hpBase") Patch<int32_t>(bytes.get(), offsetof(PlayerPack, pHPBase), longValue);
+                else if (name == "maxHpBase") Patch<int32_t>(bytes.get(), offsetof(PlayerPack, pMaxHPBase), longValue);
+                else if (name == "manaBase") Patch<int32_t>(bytes.get(), offsetof(PlayerPack, pManaBase), longValue);
+                else if (name == "maxManaBase") Patch<int32_t>(bytes.get(), offsetof(PlayerPack, pMaxManaBase), longValue);
+                else {
+                    ThrowJava(env, "java/lang/IllegalArgumentException", "Unsupported Long field: " + name);
+                    return nullptr;
+                }
+            } else {
+                 ThrowJava(env, "java/lang/IllegalArgumentException", "Unsupported object type passed to patchField.");
+                 return nullptr;
             }
         }
 
