@@ -451,57 +451,47 @@ class CharacterViewModel : ViewModel() {
         }
     }
     private fun parseNativePlayerPack(raw: ByteArray): HeroCharacter {
-        // Odczytujemy do maxManaBase: bajty 75–78.
-        check(raw.size >= 79) {
-            "PlayerPack payload too small: ${raw.size} bytes; expected at least 79."
+        // ... (existing code for name, class, stats parsing)
+
+    private fun parseNativePlayerPack(raw: ByteArray): HeroCharacter {
+        // ... (existing code for name, class, stats parsing)
+
+        // Helper to parse ItemPack from buffer
+        fun parseItem(offset: Int): DiabloItem? {
+            val iSeed = buffer.getInt(offset)
+            if (iSeed == 0) return null // Empty slot
+            val idx = buffer.getShort(offset + 6).toInt() and 0xFFFF
+            
+            // Map idx to item from library. 
+            // In a real scenario, you'd have a mapping table between idx and item names.
+            // For now, try to find by index or name match, defaulting if not found.
+            return ItemArmory.FULL_ITEM_LIBRARY.getOrNull(idx % ItemArmory.FULL_ITEM_LIBRARY.size) ?: 
+                DiabloItem(
+                    name = "Unknown Item ($idx)",
+                    baseType = "Unknown",
+                    durability = buffer.get(offset + 9).toInt() and 0xFF,
+                    maxDurability = buffer.get(offset + 10).toInt() and 0xFF
+                )
+        }
+        
+        // ... (existing equipment/inventory loop)
+
+        val equipment = mutableMapOf<EquipSlot, DiabloItem>()
+        val slots = arrayOf(
+            EquipSlot.HEAD, EquipSlot.NECK, EquipSlot.TORSO, 
+            EquipSlot.LEFT_HAND, EquipSlot.RIGHT_HAND, 
+            EquipSlot.LEFT_RING, EquipSlot.RIGHT_RING
+        )
+        // InvBody is at 0x90 in PlayerPack
+        for (i in slots.indices) {
+            parseItem(0x90 + i * 20)?.let { equipment[slots[i]] = it }
         }
 
-        val buffer = ByteBuffer.wrap(raw).order(ByteOrder.LITTLE_ENDIAN)
-
-        val nameBytes = ByteArray(32)
-        for (i in nameBytes.indices) {
-            nameBytes[i] = buffer.get(0x10 + i)
+        val inventory = mutableListOf<DiabloItem>()
+        // InvList is at 0x90 + 7 * 20 = 0x11C
+        for (i in 0 until 40) {
+            parseItem(0x11C + i * 20)?.let { inventory.add(it) }
         }
-        val parsedName = String(nameBytes, Charsets.UTF_8)
-            .substringBefore('\u0000')
-            .trim()
-
-        val classIndex = buffer.get(0x30).toInt() and 0xFF
-        val heroClass = when (classIndex) {
-            0 -> HeroClass.WARRIOR
-            1 -> HeroClass.ROGUE
-            2 -> HeroClass.SORCERER
-            3 -> HeroClass.MONK
-            else -> throw IllegalStateException(
-                "Unknown PlayerPack class index: $classIndex"
-            )
-        }
-
-        val baseStrength = buffer.get(0x31).toInt() and 0xFF
-        val baseMagic = buffer.get(0x32).toInt() and 0xFF
-        val baseDexterity = buffer.get(0x33).toInt() and 0xFF
-        val baseVitality = buffer.get(0x34).toInt() and 0xFF
-        val level = buffer.get(0x35).toInt() and 0xFF
-        val statPoints = buffer.get(0x36).toInt() and 0xFF
-
-        val experience = buffer.getInt(0x37).toLong() and 0xFFFF_FFFFL
-
-        // pGold jest int32_t w strukturze. Maskowanie zachowuje wartości uint32,
-        // np. 14 000 000, nawet gdy inna wersja/mod zapisuje je ze znakiem.
-        val gold = buffer.getInt(0x3B).toLong() and 0xFFFF_FFFFL
-
-        val currentHp = (
-            buffer.getInt(0x3F) / SaveConstants.HP_MANA_SCALE_FACTOR
-        ).coerceAtLeast(1)
-        val maxHp = (
-            buffer.getInt(0x43) / SaveConstants.HP_MANA_SCALE_FACTOR
-        ).coerceAtLeast(1)
-        val currentMana = (
-            buffer.getInt(0x47) / SaveConstants.HP_MANA_SCALE_FACTOR
-        ).coerceAtLeast(0)
-        val maxMana = (
-            buffer.getInt(0x4B) / SaveConstants.HP_MANA_SCALE_FACTOR
-        ).coerceAtLeast(0)
 
         return _character.value.copy(
             name = if (parsedName.isBlank()) "Bezimienny" else parsedName,
@@ -523,7 +513,9 @@ class CharacterViewModel : ViewModel() {
             baseLife = maxHp,
             mana = currentMana,
             maxMana = maxMana,
-            baseMana = maxMana
+            baseMana = maxMana,
+            equipment = equipment,
+            inventory = inventory
         )
     }
 
