@@ -1,6 +1,8 @@
 package com.example.data.service
 
 import com.example.data.model.HeroCharacter
+import com.example.data.model.DiabloItem
+import com.example.data.model.EquipSlot
 import com.example.data.parser.DevilutionXSaveParser
 import com.example.data.parser.MpqHeaderInfo
 import com.example.data.parser.MpqTool
@@ -8,6 +10,8 @@ import com.example.data.parser.NativeSaveBridge
 import com.example.data.parser.SaveConstants
 import java.io.File
 import java.util.UUID
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 
 /**
  * Service for handling DevilutionX save file I/O operations.
@@ -30,42 +34,9 @@ class SaveFileService {
     }
 
     /**
-     * Uses the native PlayerPack writer on a staged copy of the imported MPQ.
-     * The original bytes are backed up before the staged archive is modified.
-     * Only fields currently supported by NativeSaveBridge.patchField are patched.
-     */
-    fun exportNativeSave(
-        originalBytes: ByteArray,
-        hero: HeroCharacter,
-        backupDirectory: File,
-    ): ByteArray {
-        require(originalBytes.isNotEmpty()) { "No imported MPQ bytes are available." }
-        check(backupDirectory.mkdirs() || backupDirectory.isDirectory) {
-            "Unable to create native save backup directory."
-        }
-
-        val id = UUID.randomUUID().toString()
-        val extension = if (hero.gameMod == com.example.data.model.GameMod.HELLFIRE) SaveConstants.HELLFIRE_EXTENSION else SaveConstants.STANDARD_EXTENSION
-        val stagedArchive = File(backupDirectory, "${SaveConstants.TEMP_FILE_PREFIX.replace("-", "_")}$id.$extension")
-        val backupFile = File(backupDirectory, "native-backup-$id.bak")
-        backupFile.writeBytes(originalBytes)
-        stagedArchive.writeBytes(originalBytes)
-import com.example.data.model.DiabloItem
-import com.example.data.model.EquipSlot
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
-
-// ... (existing code)
-
-    /**
      * Serializes a list of DiabloItems into a ByteArray of fixed-size ItemPack structs.
      */
     private fun serializeItems(items: List<DiabloItem?>, maxItems: Int): ByteArray {
-        // ItemPack size: 19 bytes (based on pack.h definition)
-        // struct ItemPack { uint32_t iSeed; uint16_t iCreateInfo; uint16_t idx; uint8_t bId; ... };
-        // Wait, let's verify ItemPack size from pack.h.
-        // uint32_t iSeed (4) + uint16_t iCreateInfo (2) + uint16_t idx (2) + uint8_t bId (1) + uint8_t bDur (1) + uint8_t bMDur (1) + uint8_t bCh (1) + uint8_t bMCh (1) + uint16_t wValue (2) + uint32_t dwBuff (4) = 19?
-        // Actually, struct packing might make it 20. Let's use 20.
         val itemSize = 20
         val buffer = ByteBuffer.allocate(maxItems * itemSize).order(ByteOrder.LITTLE_ENDIAN)
 
@@ -92,33 +63,75 @@ import java.nio.ByteOrder
 
     /**
      * Uses the native PlayerPack writer on a staged copy of the imported MPQ.
+     * The original bytes are backed up before the staged archive is modified.
+     * Only fields currently supported by NativeSaveBridge.patchField are patched.
      */
     fun exportNativeSave(
         originalBytes: ByteArray,
         hero: HeroCharacter,
         backupDirectory: File,
     ): ByteArray {
-        // ... (existing code)
+        require(originalBytes.isNotEmpty()) { "No imported MPQ bytes are available." }
+        check(backupDirectory.mkdirs() || backupDirectory.isDirectory) {
+            "Unable to create native save backup directory."
+        }
+
+        val id = UUID.randomUUID().toString()
+        val extension = if (hero.gameMod == com.example.data.model.GameMod.HELLFIRE) SaveConstants.HELLFIRE_EXTENSION else SaveConstants.STANDARD_EXTENSION
+        val stagedArchive = File(backupDirectory, "${SaveConstants.TEMP_FILE_PREFIX.replace("-", "_")}$id.$extension")
+        val backupFile = File(backupDirectory, "native-backup-$id.bak")
+        backupFile.writeBytes(originalBytes)
+        stagedArchive.writeBytes(originalBytes)
+
         try {
-            // ... (existing code)
+            val isHellfire = hero.gameMod == com.example.data.model.GameMod.HELLFIRE
+            var rawHero = NativeSaveBridge.readHero(
+                stagedArchive.absolutePath,
+                hero.isMultiplayer,
+                false,
+                isHellfire,
+                isHellfire
+            )
             fun patch(field: String, value: Any) {
                 rawHero = NativeSaveBridge.patchField(rawHero, field, value)
             }
 
-            // ... (existing primitive patches)
-
-            // New inventory patches
-            val invBodyItems = listOfNulls<DiabloItem>(7)
+            patch("level", hero.level.toLong())
+            patch("class", hero.heroClass.ordinal.toLong())
+            patch("baseStrength", hero.baseStrength.toLong())
+            patch("baseMagic", hero.baseMagic.toLong())
+            patch("baseDexterity", hero.baseDexterity.toLong())
+            patch("baseVitality", hero.baseVitality.toLong())
+            patch("statPoints", hero.statPoints.toLong())
+            patch("experience", hero.experience)
+            patch("gold", hero.gold)
+            patch("hpBase", hero.baseLife.toLong() * SaveConstants.HP_MANA_SCALE_FACTOR)
+            patch("maxHpBase", hero.maxLife.toLong() * SaveConstants.HP_MANA_SCALE_FACTOR)
+            patch("manaBase", hero.baseMana.toLong() * SaveConstants.HP_MANA_SCALE_FACTOR)
+            patch("maxManaBase", hero.maxMana.toLong() * SaveConstants.HP_MANA_SCALE_FACTOR)
+            
+            // Inventory patches
+            val invBodyItems = arrayOfNulls<DiabloItem>(7)
             EquipSlot.entries.forEachIndexed { index, slot -> 
                 invBodyItems[index] = hero.equipment[slot] 
             }
-            patch("invBody", serializeItems(invBodyItems, 7))
-
+            patch("invBody", serializeItems(invBodyItems.toList(), 7))
+            
             val invListItems = hero.inventory.take(40)
             patch("invList", serializeItems(invListItems, 40))
 
-            // ... (existing writeHero)
-
+            NativeSaveBridge.writeHero(
+                stagedArchive.absolutePath,
+                rawHero,
+                hero.isMultiplayer,
+                false,
+                hero.gameMod == com.example.data.model.GameMod.HELLFIRE,
+            )
+            return stagedArchive.readBytes()
+        } finally {
+            stagedArchive.delete()
+        }
+    }
 
     /**
      * Analyzes MPQ header info from raw bytes (useful for diagnostic).
