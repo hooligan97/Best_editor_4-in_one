@@ -167,7 +167,7 @@ object DevilutionXSaveParser {
             statPoints = statPoints,
             life = life,
             maxLife = maxLife,
-            baseLife = baseLife,
+            baseLife = maxLife,
             mana = mana,
             maxMana = maxMana,
             baseMana = baseMana,
