@@ -29,14 +29,62 @@ using namespace devilution;
 std::mutex gSaveCoreMutex;
 
 void LogToFile(const std::string& msg) {
-    // Correct path based on app build.gradle.kts namespace
     std::ofstream logFile("/storage/emulated/0/Android/data/com.aistudio.applet.quvzzr/files/d1_cpp_log.txt", std::ios::app);
     if (logFile.is_open()) {
         logFile << msg << std::endl;
         logFile.close();
     }
 }
-// ... (rest of the helper functions)
+
+void ThrowJava(JNIEnv *env, const char *className, const std::string &message)
+{
+    jclass exceptionClass = env->FindClass(className);
+    if (exceptionClass != nullptr) env->ThrowNew(exceptionClass, message.c_str());
+}
+
+void ConfigureGameFlags(bool multiplayer, bool spawn, bool hellfire)
+{
+    gbIsMultiplayer = multiplayer;
+    gbIsSpawn = spawn;
+    gbIsHellfire = hellfire;
+    gbIsHellfireSaveGame = hellfire;
+}
+
+bool IsHellfirePath(const std::string &path)
+{
+    if (path.size() < 4) return false;
+    std::string ext = path.substr(path.size() - 4);
+    std::transform(ext.begin(), ext.end(), ext.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return ext == ".hsv";
+}
+
+template <typename T>
+void Patch(std::byte *raw, size_t offset, int64_t value)
+{
+    if (value < static_cast<int64_t>(std::numeric_limits<T>::min()) ||
+        value > static_cast<int64_t>(std::numeric_limits<T>::max()))
+        throw std::out_of_range("Value does not fit selected PlayerPack field.");
+    const T converted = static_cast<T>(value);
+    std::memcpy(raw + offset, &converted, sizeof(T));
+}
+
+class UtfChars {
+public:
+    UtfChars(JNIEnv *env, jstring value)
+        : env_(env), value_(value), chars_(env->GetStringUTFChars(value, nullptr)) {}
+    ~UtfChars() { if (chars_ != nullptr) env_->ReleaseStringUTFChars(value_, chars_); }
+    UtfChars(const UtfChars &) = delete;
+    UtfChars &operator=(const UtfChars &) = delete;
+    const char *get() const { return chars_; }
+private:
+    JNIEnv *env_;
+    jstring value_;
+    const char *chars_;
+};
+} // namespace
+
+constexpr size_t MIN_SAVE_SIZE = 812;
 
 extern "C" JNIEXPORT jbyteArray JNICALL
 Java_com_example_data_parser_NativeSaveBridge_readHero(
@@ -81,7 +129,7 @@ Java_com_example_data_parser_NativeSaveBridge_readHero(
 
         LogToFile("ReadHero: Decoding payload");
         size = codec_decode(payload.get(), size, pfile_get_password());
-
+        
         if (size == 0 || size < MIN_SAVE_SIZE) { 
             std::string errMsg = "Invalid hero payload. Actual size: " + std::to_string(size);
             LogToFile("ReadHero: " + errMsg);
@@ -104,121 +152,12 @@ Java_com_example_data_parser_NativeSaveBridge_readHero(
     }
     return nullptr;
 }
-// ... (patchField logic similarly updated)
-class UtfChars {
-public:
-    UtfChars(JNIEnv *env, jstring value)
-        : env_(env), value_(value), chars_(env->GetStringUTFChars(value, nullptr)) {}
-    ~UtfChars() { if (chars_ != nullptr) env_->ReleaseStringUTFChars(value_, chars_); }
-    UtfChars(const UtfChars &) = delete;
-    UtfChars &operator=(const UtfChars &) = delete;
-    const char *get() const { return chars_; }
-private:
-    JNIEnv *env_;
-    jstring value_;
-    const char *chars_;
-};
-
-void ThrowJava(JNIEnv *env, const char *className, const std::string &message)
-{
-    jclass exceptionClass = env->FindClass(className);
-    if (exceptionClass != nullptr) env->ThrowNew(exceptionClass, message.c_str());
-}
-
-void ConfigureGameFlags(bool multiplayer, bool spawn, bool hellfire)
-{
-    gbIsMultiplayer = multiplayer;
-    gbIsSpawn = spawn;
-    gbIsHellfire = hellfire;
-    gbIsHellfireSaveGame = hellfire;
-}
-
-bool IsHellfirePath(const std::string &path)
-{
-    if (path.size() < 4) return false;
-    std::string ext = path.substr(path.size() - 4);
-    std::transform(ext.begin(), ext.end(), ext.begin(),
-                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-    return ext == ".hsv";
-}
-
-template <typename T>
-void Patch(std::byte *raw, size_t offset, int64_t value)
-{
-    if (value < static_cast<int64_t>(std::numeric_limits<T>::min()) ||
-        value > static_cast<int64_t>(std::numeric_limits<T>::max()))
-        throw std::out_of_range("Value does not fit selected PlayerPack field.");
-    const T converted = static_cast<T>(value);
-    std::memcpy(raw + offset, &converted, sizeof(T));
-}
-} // namespace
-
-// Define minimum size for stats reading - approximately up to pMaxManaBase (offsetof + sizeof)
-constexpr size_t MIN_SAVE_SIZE = 812;
-
-extern "C" JNIEXPORT jbyteArray JNICALL
-Java_com_example_data_parser_NativeSaveBridge_readHero(
-    JNIEnv *env, jclass, jstring savePath, jboolean multiplayer, jboolean spawn, jboolean hellfire, jboolean hellfireSaveGame)
-{
-    __android_log_print(ANDROID_LOG_INFO, "D1SaveBridge", "ReadHero: Start");
-    if (env == nullptr || savePath == nullptr) return nullptr;
-
-    UtfChars path(env, savePath);
-    if (path.get() == nullptr) return nullptr;
-    try {
-        std::lock_guard<std::mutex> saveCoreLock(gSaveCoreMutex);
-        __android_log_print(ANDROID_LOG_INFO, "D1SaveBridge", "ReadHero: Configuring flags");
-        ConfigureGameFlags(multiplayer == JNI_TRUE, spawn == JNI_TRUE, hellfire == JNI_TRUE);
-        gbIsHellfireSaveGame = hellfireSaveGame == JNI_TRUE;
-
-        int32_t error = 0;
-        __android_log_print(ANDROID_LOG_INFO, "D1SaveBridge", "ReadHero: Opening MPQ");
-        auto archive = MpqArchive::Open(path.get(), error);
-        if (!archive) {
-            ThrowJava(env, "java/lang/IllegalStateException",
-                      std::string("Could not open MPQ archive: ") + MpqArchive::ErrorMessage(error));
-            return nullptr;
-        }
-        size_t size = 0;
-        __android_log_print(ANDROID_LOG_INFO, "D1SaveBridge", "ReadHero: Reading hero entry");
-        auto payload = ReadArchive(*archive, "hero", &size);
-
-        if (!payload) {
-             ThrowJava(env, "java/lang/IllegalStateException", "Could not read hero entry.");
-             return nullptr;
-        }
-
-        // Decrypt the hero payload
-        __android_log_print(ANDROID_LOG_INFO, "D1SaveBridge", "ReadHero: Decoding payload");
-        size = codec_decode(payload.get(), size, pfile_get_password());
-        
-        if (size == 0 || size < MIN_SAVE_SIZE) { 
-            std::string errMsg = "Invalid hero payload. Actual size: " + std::to_string(size) +
-                                 ", Expected size: " + std::to_string(sizeof(PlayerPack));
-            __android_log_print(ANDROID_LOG_ERROR, "D1SaveBridge", "%s", errMsg.c_str());
-            ThrowJava(env, "java/lang/IllegalStateException", errMsg);
-            return nullptr;
-        }
-
-        __android_log_print(ANDROID_LOG_INFO, "D1SaveBridge", "ReadHero: Returning result");
-        jbyteArray result = env->NewByteArray(static_cast<jsize>(size));
-        if (result != nullptr)
-            env->SetByteArrayRegion(result, 0, static_cast<jsize>(size),
-                                    reinterpret_cast<const jbyte *>(payload.get()));
-        return result;
-    } catch (const std::exception &e) {
-        ThrowJava(env, "java/lang/IllegalStateException", e.what());
-    } catch (...) {
-        ThrowJava(env, "java/lang/IllegalStateException", "Unknown native save read error.");
-    }
-    return nullptr;
-}
 
 extern "C" JNIEXPORT jbyteArray JNICALL
 Java_com_example_data_parser_NativeSaveBridge_patchField(
     JNIEnv *env, jclass, jbyteArray rawHero, jstring fieldName, jobject value)
 {
-    __android_log_print(ANDROID_LOG_INFO, "D1SaveBridge", "PatchField: Start");
+    LogToFile("PatchField: Start");
     if (env == nullptr || rawHero == nullptr || fieldName == nullptr || value == nullptr) return nullptr;
     try {
         std::lock_guard<std::mutex> saveCoreLock(gSaveCoreMutex);
@@ -228,7 +167,7 @@ Java_com_example_data_parser_NativeSaveBridge_patchField(
             return nullptr;
         }
         
-        __android_log_print(ANDROID_LOG_INFO, "D1SaveBridge", "PatchField: Allocating buffer");
+        LogToFile("PatchField: Allocating buffer");
         auto bytes = std::make_unique<std::byte[]>(static_cast<size_t>(size));
         env->GetByteArrayRegion(rawHero, 0, size, reinterpret_cast<jbyte *>(bytes.get()));
         if (env->ExceptionCheck()) return nullptr;
@@ -237,11 +176,8 @@ Java_com_example_data_parser_NativeSaveBridge_patchField(
         if (field.get() == nullptr) return nullptr;
         const std::string name(field.get());
 
-        __android_log_print(ANDROID_LOG_INFO, "D1SaveBridge", "PatchField: Applying patch for field: %s", name.c_str());
+        LogToFile("PatchField: Applying patch for field: " + name);
         
-        // ... (rest of the logic remains unchanged, but I will make sure the calls are robust)
-
-        // Check for ByteArray
         jclass byteArrayClass = env->FindClass("[B");
         if (env->IsInstanceOf(value, byteArrayClass)) {
             jbyteArray valueArray = static_cast<jbyteArray>(value);
@@ -251,22 +187,24 @@ Java_com_example_data_parser_NativeSaveBridge_patchField(
 
             if (name == "invBody") {
                 if (valueSize != NUM_INVLOC * sizeof(ItemPack)) {
+                    LogToFile("PatchField: invBody size mismatch");
                     ThrowJava(env, "java/lang/IllegalArgumentException", "invBody size mismatch");
                     return nullptr;
                 }
                 std::memcpy(reinterpret_cast<uint8_t*>(bytes.get()) + offsetof(PlayerPack, InvBody), valueBytes.get(), valueSize);
             } else if (name == "invList") {
                 if (valueSize != InventoryGridCells * sizeof(ItemPack)) {
+                    LogToFile("PatchField: invList size mismatch");
                     ThrowJava(env, "java/lang/IllegalArgumentException", "invList size mismatch");
                     return nullptr;
                 }
                 std::memcpy(reinterpret_cast<uint8_t*>(bytes.get()) + offsetof(PlayerPack, InvList), valueBytes.get(), valueSize);
             } else {
+                LogToFile("PatchField: Unsupported ByteArray field: " + name);
                 ThrowJava(env, "java/lang/IllegalArgumentException", "Unsupported ByteArray field: " + name);
                 return nullptr;
             }
         } 
-        // Check for Long
         else {
             jclass longClass = env->FindClass("java/lang/Long");
             if (env->IsInstanceOf(value, longClass)) {
@@ -287,10 +225,12 @@ Java_com_example_data_parser_NativeSaveBridge_patchField(
                 else if (name == "manaBase") Patch<int32_t>(bytes.get(), offsetof(PlayerPack, pManaBase), longValue);
                 else if (name == "maxManaBase") Patch<int32_t>(bytes.get(), offsetof(PlayerPack, pMaxManaBase), longValue);
                 else {
+                    LogToFile("PatchField: Unsupported Long field: " + name);
                     ThrowJava(env, "java/lang/IllegalArgumentException", "Unsupported Long field: " + name);
                     return nullptr;
                 }
             } else {
+                 LogToFile("PatchField: Unsupported object type");
                  ThrowJava(env, "java/lang/IllegalArgumentException", "Unsupported object type passed to patchField.");
                  return nullptr;
             }
@@ -301,8 +241,10 @@ Java_com_example_data_parser_NativeSaveBridge_patchField(
             env->SetByteArrayRegion(result, 0, size, reinterpret_cast<const jbyte *>(bytes.get()));
         return result;
     } catch (const std::exception &e) {
+        LogToFile(std::string("WYJĄTEK C++ (PatchField): ") + e.what());
         ThrowJava(env, "java/lang/IllegalArgumentException", e.what());
     } catch (...) {
+        LogToFile("WYJĄTEK C++ (PatchField): Nieznany");
         ThrowJava(env, "java/lang/IllegalArgumentException", "Unknown raw field patch error.");
     }
     return nullptr;
@@ -316,8 +258,6 @@ Java_com_example_data_parser_NativeSaveBridge_writeHero(
     UtfChars path(env, savePath);
     if (path.get() == nullptr || rawHero == nullptr) return;
     try {
-        // All save-core operations must be serialized: the upstream codec and
-        // game flags use process-global state shared with readHero().
         std::lock_guard<std::mutex> saveCoreLock(gSaveCoreMutex);
         const jsize size = env->GetArrayLength(rawHero);
         if (size < MIN_SAVE_SIZE) {
