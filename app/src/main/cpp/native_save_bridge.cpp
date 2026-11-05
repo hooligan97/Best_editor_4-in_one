@@ -100,8 +100,11 @@ Java_com_example_data_parser_NativeSaveBridge_readHero(
         size_t size = 0;
         auto payload = ReadArchive(*archive, "hero", &size);
 
+        // Decrypt the hero payload
+        size = codec_decode(payload.get(), size, pfile_get_password());
+        
         // Relaxed validation for VKDMod or potentially other modified saves
-        if (!payload || size < MIN_SAVE_SIZE) { // Użyj wartości minimalnej lub MIN_VKDMOD_SIZE
+        if (size == 0 || size < MIN_SAVE_SIZE) { // Użyj wartości minimalnej lub MIN_VKDMOD_SIZE
             std::string errMsg = "Invalid hero payload. Actual size: " + std::to_string(size) +
                                  ", Expected size: " + std::to_string(sizeof(PlayerPack));
             __android_log_print(ANDROID_LOG_ERROR, "D1SaveBridge", "%s", errMsg.c_str());
