@@ -451,10 +451,47 @@ class CharacterViewModel : ViewModel() {
         }
     }
     private fun parseNativePlayerPack(raw: ByteArray): HeroCharacter {
-        // ... (existing code for name, class, stats parsing)
+        val buffer = ByteBuffer.wrap(raw).order(ByteOrder.LITTLE_ENDIAN)
 
-    private fun parseNativePlayerPack(raw: ByteArray): HeroCharacter {
-        // ... (existing code for name, class, stats parsing)
+        // pName starts at 0x10 (32 bytes)
+        val nameBytes = ByteArray(32)
+        buffer.position(0x10)
+        buffer.get(nameBytes)
+        val parsedName = String(nameBytes).substringBefore('\u0000').trim()
+
+        // pClass = 48
+        val classIndex = buffer.get(48).toInt() and 0xFF
+        val heroClass = HeroClass.fromIndex(classIndex)
+
+        // pBaseStr = 49, pBaseMag = 50, pBaseDex = 51, pBaseVit = 52
+        val baseStrength = buffer.get(49).toInt() and 0xFF
+        val baseMagic = buffer.get(50).toInt() and 0xFF
+        val baseDexterity = buffer.get(51).toInt() and 0xFF
+        val baseVitality = buffer.get(52).toInt() and 0xFF
+
+        // pLevel = 53, pStatPts = 54
+        val level = buffer.get(53).toInt() and 0xFF
+        val statPoints = buffer.get(54).toInt() and 0xFF
+
+        // pExperience = 55 (4 bytes)
+        val experience = buffer.getInt(55).toLong() and 0xFFFFFFFFL
+
+        // pGold = 59 (4 bytes)
+        val gold = buffer.getInt(59).toLong() and 0xFFFFFFFFL
+
+        // pHPBase = 63 (4 bytes)
+        val rawHpBase = buffer.getInt(63)
+        // pMaxHPBase = 67 (4 bytes)
+        val rawMaxHp = buffer.getInt(67)
+        // pManaBase = 71 (4 bytes)
+        val rawManaBase = buffer.getInt(71)
+        // pMaxManaBase = 75 (4 bytes)
+        val rawMaxMana = buffer.getInt(75)
+
+        val currentHp = (rawHpBase / 64).coerceAtLeast(1)
+        val maxHp = (rawMaxHp / 64).coerceAtLeast(1)
+        val currentMana = (rawManaBase / 64).coerceAtLeast(0)
+        val maxMana = (rawMaxMana / 64).coerceAtLeast(0)
 
         // Helper to parse ItemPack from buffer
         fun parseItem(offset: Int): DiabloItem? {
@@ -462,9 +499,6 @@ class CharacterViewModel : ViewModel() {
             if (iSeed == 0) return null // Empty slot
             val idx = buffer.getShort(offset + 6).toInt() and 0xFFFF
             
-            // Map idx to item from library. 
-            // In a real scenario, you'd have a mapping table between idx and item names.
-            // For now, try to find by index or name match, defaulting if not found.
             return ItemArmory.FULL_ITEM_LIBRARY.getOrNull(idx % ItemArmory.FULL_ITEM_LIBRARY.size) ?: 
                 DiabloItem(
                     name = "Unknown Item ($idx)",
@@ -474,8 +508,6 @@ class CharacterViewModel : ViewModel() {
                 )
         }
         
-        // ... (existing equipment/inventory loop)
-
         val equipment = mutableMapOf<EquipSlot, DiabloItem>()
         val slots = arrayOf(
             EquipSlot.HEAD, EquipSlot.NECK, EquipSlot.TORSO, 
