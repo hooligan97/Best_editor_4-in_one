@@ -65,50 +65,41 @@ object DevilutionXSaveParser {
     fun parseHeroStruct(bytes: ByteArray): HeroCharacter {
         val buf = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
 
-        // Offset 0x00: Name (16 bytes, ASCII null-terminated)
-        val nameBytes = ByteArray(16)
+        // PlayerPack struct offsets from pack.h:
+        // pName starts at 0x10 (16 bytes)
+        // pClass starts at 0x30 (48 bytes)
+
+        buf.position(0x10)
+        val nameBytes = ByteArray(32)
         buf.get(nameBytes)
         val rawName = String(nameBytes, Charsets.US_ASCII).takeWhile { it != '\u0000' }.trim()
         val name = if (rawName.isBlank()) "Hero" else rawName
 
-        // Offset 0x10: Class (4 bytes or 1 byte + 3 padding)
-        val classInt = buf.int
-        val heroClass = HeroClass.fromIndex(classInt.coerceIn(0, 5))
+        buf.position(0x30)
+        val classIndex = buf.get().toInt() and 0xFF
+        val heroClass = HeroClass.fromIndex(classIndex)
 
-        // Offset 0x14: Level
-        val level = buf.int.coerceIn(1, 50)
+        val baseStrength = buf.get().toInt() and 0xFF
+        val baseMagic = buf.get().toInt() and 0xFF
+        val baseDexterity = buf.get().toInt() and 0xFF
+        val baseVitality = buf.get().toInt() and 0xFF
 
-        // Offset 0x18: Experience
+        val level = buf.get().toInt() and 0xFF
+        val statPoints = buf.get().toInt() and 0xFF
+
         val experience = buf.int.toLong() and 0xFFFFFFFFL
-
-        // Offset 0x1C: Gold
         val gold = buf.int.toLong() and 0xFFFFFFFFL
 
-        // Stats offsets
-        val strength = buf.int.coerceIn(0, 300)
-        val baseStrength = buf.int.coerceIn(0, 300)
-        val magic = buf.int.coerceIn(0, 300)
-        val baseMagic = buf.int.coerceIn(0, 300)
-        val dexterity = buf.int.coerceIn(0, 300)
-        val baseDexterity = buf.int.coerceIn(0, 300)
-        val vitality = buf.int.coerceIn(0, 300)
-        val baseVitality = buf.int.coerceIn(0, 300)
-        val statPoints = buf.int.coerceIn(0, 500)
-
-        // HP & Mana (stored multiplied by 64 in Diablo 1)
-        val rawLife = buf.int
-        val rawMaxLife = buf.int
-        val rawBaseLife = buf.int
-        val rawMana = buf.int
+        val rawHpBase = buf.int
+        val rawMaxHp = buf.int
+        val rawManaBase = buf.int
         val rawMaxMana = buf.int
-        val rawBaseMana = buf.int
 
-        val life = if (rawLife > 1000) rawLife / 64 else rawLife.coerceAtLeast(1)
-        val maxLife = if (rawMaxLife > 1000) rawMaxLife / 64 else rawMaxLife.coerceAtLeast(1)
-        val baseLife = if (rawBaseLife > 1000) rawBaseLife / 64 else rawBaseLife.coerceAtLeast(1)
-        val mana = if (rawMana > 1000) rawMana / 64 else rawMana.coerceAtLeast(0)
-        val maxMana = if (rawMaxMana > 1000) rawMaxMana / 64 else rawMaxMana.coerceAtLeast(0)
-        val baseMana = if (rawBaseMana > 1000) rawBaseMana / 64 else rawBaseMana.coerceAtLeast(0)
+        val life = (rawHpBase / 64).coerceAtLeast(1)
+        val maxLife = (rawMaxHp / 64).coerceAtLeast(1)
+        val mana = (rawManaBase / 64).coerceAtLeast(0)
+        val maxMana = (rawMaxMana / 64).coerceAtLeast(0)
+
 
         // Spell levels (37 spells in Diablo 1 / Hellfire)
         val spellLevels = mutableMapOf<String, Int>()
