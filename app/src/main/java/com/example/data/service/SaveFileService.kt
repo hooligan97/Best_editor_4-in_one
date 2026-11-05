@@ -3,7 +3,6 @@ package com.example.data.service
 import com.example.data.model.HeroCharacter
 import com.example.data.model.DiabloItem
 import com.example.data.model.EquipSlot
-import com.example.data.parser.DevilutionXSaveParser
 import com.example.data.parser.MpqHeaderInfo
 import com.example.data.parser.MpqTool
 import com.example.data.parser.NativeSaveBridge
@@ -21,16 +20,17 @@ class SaveFileService {
 
     /**
      * Parses binary save data into a HeroCharacter object.
+     * Note: Full MPQ parsing is now handled natively or not supported via this service.
      */
     fun parseSave(bytes: ByteArray, filename: String = ""): HeroCharacter {
-        return DevilutionXSaveParser.parseSaveBytes(bytes, filename)
+        throw UnsupportedOperationException("Full MPQ parsing via DevilutionXSaveParser is removed.")
     }
 
     /**
      * Serializes a HeroCharacter back into a binary MPQ save file.
      */
     fun exportSave(hero: HeroCharacter): ByteArray {
-        return DevilutionXSaveParser.createSaveFileMpq(hero)
+        throw UnsupportedOperationException("MPQ creation via DevilutionXSaveParser is removed.")
     }
 
     /**
