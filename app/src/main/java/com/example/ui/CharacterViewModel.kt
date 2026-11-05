@@ -452,6 +452,11 @@ class CharacterViewModel : ViewModel() {
     }
     private fun parseNativePlayerPack(raw: ByteArray): HeroCharacter {
         val buffer = ByteBuffer.wrap(raw).order(ByteOrder.LITTLE_ENDIAN)
+        
+        if (raw.size < 512) { // Minimal expected PlayerPack size
+            Log.e("D1SaveBridge", "Hero payload too small: ${raw.size} bytes")
+            return _character.value
+        }
 
         // pName starts at 0x10 (32 bytes)
         val nameBytes = ByteArray(32)
@@ -459,17 +464,17 @@ class CharacterViewModel : ViewModel() {
         buffer.get(nameBytes)
         val parsedName = String(nameBytes).substringBefore('\u0000').trim()
 
-        // pClass = 48
+        // pClass = 48 (1 byte)
         val classIndex = buffer.get(48).toInt() and 0xFF
         val heroClass = HeroClass.fromIndex(classIndex)
 
-        // pBaseStr = 49, pBaseMag = 50, pBaseDex = 51, pBaseVit = 52
+        // pBaseStr = 49 (1 byte), pBaseMag = 50 (1 byte), pBaseDex = 51 (1 byte), pBaseVit = 52 (1 byte)
         val baseStrength = buffer.get(49).toInt() and 0xFF
         val baseMagic = buffer.get(50).toInt() and 0xFF
         val baseDexterity = buffer.get(51).toInt() and 0xFF
         val baseVitality = buffer.get(52).toInt() and 0xFF
 
-        // pLevel = 53, pStatPts = 54
+        // pLevel = 53 (1 byte), pStatPts = 54 (1 byte)
         val level = buffer.get(53).toInt() and 0xFF
         val statPoints = buffer.get(54).toInt() and 0xFF
 
@@ -495,6 +500,7 @@ class CharacterViewModel : ViewModel() {
 
         // Helper to parse ItemPack from buffer
         fun parseItem(offset: Int): DiabloItem? {
+            if (offset + 20 > raw.size) return null
             val iSeed = buffer.getInt(offset)
             if (iSeed == 0) return null // Empty slot
             val idx = buffer.getShort(offset + 6).toInt() and 0xFFFF
