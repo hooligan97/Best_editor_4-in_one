@@ -83,14 +83,19 @@ extern "C" JNIEXPORT jbyteArray JNICALL
 Java_com_example_data_parser_NativeSaveBridge_readHero(
     JNIEnv *env, jclass, jstring savePath, jboolean multiplayer, jboolean spawn, jboolean hellfire, jboolean hellfireSaveGame)
 {
+    __android_log_print(ANDROID_LOG_INFO, "D1SaveBridge", "ReadHero: Start");
+    if (env == nullptr || savePath == nullptr) return nullptr;
+
     UtfChars path(env, savePath);
     if (path.get() == nullptr) return nullptr;
     try {
         std::lock_guard<std::mutex> saveCoreLock(gSaveCoreMutex);
+        __android_log_print(ANDROID_LOG_INFO, "D1SaveBridge", "ReadHero: Configuring flags");
         ConfigureGameFlags(multiplayer == JNI_TRUE, spawn == JNI_TRUE, hellfire == JNI_TRUE);
         gbIsHellfireSaveGame = hellfireSaveGame == JNI_TRUE;
 
         int32_t error = 0;
+        __android_log_print(ANDROID_LOG_INFO, "D1SaveBridge", "ReadHero: Opening MPQ");
         auto archive = MpqArchive::Open(path.get(), error);
         if (!archive) {
             ThrowJava(env, "java/lang/IllegalStateException",
@@ -98,21 +103,27 @@ Java_com_example_data_parser_NativeSaveBridge_readHero(
             return nullptr;
         }
         size_t size = 0;
+        __android_log_print(ANDROID_LOG_INFO, "D1SaveBridge", "ReadHero: Reading hero entry");
         auto payload = ReadArchive(*archive, "hero", &size);
 
+        if (!payload) {
+             ThrowJava(env, "java/lang/IllegalStateException", "Could not read hero entry.");
+             return nullptr;
+        }
+
         // Decrypt the hero payload
+        __android_log_print(ANDROID_LOG_INFO, "D1SaveBridge", "ReadHero: Decoding payload");
         size = codec_decode(payload.get(), size, pfile_get_password());
         
-        // Relaxed validation for VKDMod or potentially other modified saves
-        if (size == 0 || size < MIN_SAVE_SIZE) { // Użyj wartości minimalnej lub MIN_VKDMOD_SIZE
+        if (size == 0 || size < MIN_SAVE_SIZE) { 
             std::string errMsg = "Invalid hero payload. Actual size: " + std::to_string(size) +
                                  ", Expected size: " + std::to_string(sizeof(PlayerPack));
             __android_log_print(ANDROID_LOG_ERROR, "D1SaveBridge", "%s", errMsg.c_str());
             ThrowJava(env, "java/lang/IllegalStateException", errMsg);
             return nullptr;
         }
-        // ... rest of the function ...
 
+        __android_log_print(ANDROID_LOG_INFO, "D1SaveBridge", "ReadHero: Returning result");
         jbyteArray result = env->NewByteArray(static_cast<jsize>(size));
         if (result != nullptr)
             env->SetByteArrayRegion(result, 0, static_cast<jsize>(size),
@@ -130,7 +141,8 @@ extern "C" JNIEXPORT jbyteArray JNICALL
 Java_com_example_data_parser_NativeSaveBridge_patchField(
     JNIEnv *env, jclass, jbyteArray rawHero, jstring fieldName, jobject value)
 {
-    if (rawHero == nullptr || fieldName == nullptr || value == nullptr) return nullptr;
+    __android_log_print(ANDROID_LOG_INFO, "D1SaveBridge", "PatchField: Start");
+    if (env == nullptr || rawHero == nullptr || fieldName == nullptr || value == nullptr) return nullptr;
     try {
         std::lock_guard<std::mutex> saveCoreLock(gSaveCoreMutex);
         const jsize size = env->GetArrayLength(rawHero);
@@ -138,6 +150,8 @@ Java_com_example_data_parser_NativeSaveBridge_patchField(
             ThrowJava(env, "java/lang/IllegalArgumentException", "Raw payload size too small.");
             return nullptr;
         }
+        
+        __android_log_print(ANDROID_LOG_INFO, "D1SaveBridge", "PatchField: Allocating buffer");
         auto bytes = std::make_unique<std::byte[]>(static_cast<size_t>(size));
         env->GetByteArrayRegion(rawHero, 0, size, reinterpret_cast<jbyte *>(bytes.get()));
         if (env->ExceptionCheck()) return nullptr;
@@ -145,6 +159,10 @@ Java_com_example_data_parser_NativeSaveBridge_patchField(
         UtfChars field(env, fieldName);
         if (field.get() == nullptr) return nullptr;
         const std::string name(field.get());
+
+        __android_log_print(ANDROID_LOG_INFO, "D1SaveBridge", "PatchField: Applying patch for field: %s", name.c_str());
+        
+        // ... (rest of the logic remains unchanged, but I will make sure the calls are robust)
 
         // Check for ByteArray
         jclass byteArrayClass = env->FindClass("[B");
