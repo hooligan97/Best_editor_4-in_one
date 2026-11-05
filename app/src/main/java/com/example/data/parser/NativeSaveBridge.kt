@@ -16,7 +16,7 @@ object NativeSaveBridge {
     external fun readHero(savePath: String, isMultiplayer: Boolean, isSpawn: Boolean, isHellfire: Boolean, isHellfireSaveGame: Boolean): ByteArray
 
     @JvmStatic
-    external fun patchField(rawHero: ByteArray, fieldName: String, value: Long): ByteArray
+    external fun patchField(rawHero: ByteArray, fieldName: String, value: Any): ByteArray
 
     /**
      * Re-encodes the decoded PlayerPack and replaces only MPQ's "hero" entry.
