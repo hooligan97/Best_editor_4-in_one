@@ -553,14 +553,16 @@ class CharacterViewModel : ViewModel() {
 
     fun exportSaveMpqBytes(backupDirectory: java.io.File? = null): ByteArray {
         val original = importedOriginalSave
-        if (original != null && backupDirectory != null) {
-            return com.example.data.service.SaveFileService().exportNativeSave(
-                originalBytes = original,
-                hero = _character.value,
-                backupDirectory = java.io.File(backupDirectory, "native-save-backups"),
-            )
-        }
-        return com.example.data.service.SaveFileService().exportSave(_character.value)
+            ?: throw IllegalStateException("No imported MPQ bytes available for native save export.")
+        
+        val dir = backupDirectory 
+            ?: throw IllegalArgumentException("Backup directory is required for native save export.")
+
+        return com.example.data.service.SaveFileService().exportNativeSave(
+            originalBytes = original,
+            hero = _character.value,
+            backupDirectory = java.io.File(dir, "native-save-backups"),
+        )
     }
 
     fun inspectBytes(bytes: ByteArray) {

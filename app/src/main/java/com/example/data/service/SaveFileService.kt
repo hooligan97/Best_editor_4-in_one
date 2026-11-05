@@ -19,21 +19,6 @@ import java.nio.ByteOrder
 class SaveFileService {
 
     /**
-     * Parses binary save data into a HeroCharacter object.
-     * Note: Full MPQ parsing is now handled natively or not supported via this service.
-     */
-    fun parseSave(bytes: ByteArray, filename: String = ""): HeroCharacter {
-        throw UnsupportedOperationException("Full MPQ parsing via DevilutionXSaveParser is removed.")
-    }
-
-    /**
-     * Serializes a HeroCharacter back into a binary MPQ save file.
-     */
-    fun exportSave(hero: HeroCharacter): ByteArray {
-        throw UnsupportedOperationException("MPQ creation via DevilutionXSaveParser is removed.")
-    }
-
-    /**
      * Serializes a list of DiabloItems into a ByteArray of fixed-size ItemPack structs.
      */
     private fun serializeItems(items: List<DiabloItem?>, maxItems: Int): ByteArray {
