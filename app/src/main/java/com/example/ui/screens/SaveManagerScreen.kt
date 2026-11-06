@@ -223,7 +223,7 @@ fun SaveManagerScreen(
                     ) {
                         Icon(Icons.Default.FileOpen, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Otwórz plik .sv", fontSize = 12.sp)
+                        Text("Otwórz plik zapisu", fontSize = 12.sp)
                     }
 
                     FilledTonalButton(

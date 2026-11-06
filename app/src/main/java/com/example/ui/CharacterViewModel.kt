@@ -1,12 +1,17 @@
 package com.example.ui
 
 import androidx.lifecycle.ViewModel
+import android.util.Log
 import com.example.data.model.*
 import com.example.data.parser.*
+import com.example.data.parser.SaveConstants
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import java.io.File
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 
 enum class EditorTab(val title: String, val iconLabel: String) {
     HERO("Hero", "Hero Identity"),
@@ -27,6 +32,8 @@ data class SavedVaultHero(
 class CharacterViewModel : ViewModel() {
 
     private val _character = MutableStateFlow(HeroCharacter.createGodly(HeroClass.WARRIOR, "Aidan"))
+    private var importedOriginalSave: ByteArray? = null
+    private var importedRawHero: ByteArray? = null
     val character: StateFlow<HeroCharacter> = _character.asStateFlow()
 
     private val _activeTab = MutableStateFlow(EditorTab.HERO)
@@ -156,7 +163,7 @@ class CharacterViewModel : ViewModel() {
     }
 
     fun updateLevel(level: Int) {
-        val clamped = level.coerceIn(1, 50)
+        val clamped = level.coerceIn(1, _character.value.gameMod.maxLevel)
         val calculatedXp = HeroCharacter.xpForLevel(clamped)
         _character.update { it.copy(level = clamped, experience = calculatedXp) }
         showMessage("Level set to $clamped (XP updated)")
@@ -181,6 +188,12 @@ class CharacterViewModel : ViewModel() {
         _character.update { it.copy(dungeonLevel = floor.coerceIn(0, 24)) }
     }
 
+    fun createNewCharacter(heroClass: HeroClass, name: String, mod: GameMod) {
+        val newChar = HeroCharacter.createStarter(heroClass, name).copy(gameMod = mod)
+        _character.value = newChar
+        showMessage("Created new ${heroClass.displayName} for ${mod.displayName}")
+    }
+
     // Stats
     fun modifyStat(stat: String, delta: Int) {
         _character.update { c ->
@@ -203,6 +216,34 @@ class CharacterViewModel : ViewModel() {
                 }
                 "points", "statpoints" -> {
                     val newVal = (c.statPoints + delta).coerceIn(0, 999)
+                    c.copy(statPoints = newVal)
+                }
+                else -> c
+            }
+        }
+    }
+
+    fun setStatValue(stat: String, value: Int) {
+        _character.update { c ->
+            when (stat.lowercase()) {
+                "strength", "str" -> {
+                    val newVal = value.coerceIn(0, 300)
+                    c.copy(strength = newVal, baseStrength = newVal)
+                }
+                "magic", "mag" -> {
+                    val newVal = value.coerceIn(0, 300)
+                    c.copy(magic = newVal, baseMagic = newVal)
+                }
+                "dexterity", "dex" -> {
+                    val newVal = value.coerceIn(0, 300)
+                    c.copy(dexterity = newVal, baseDexterity = newVal)
+                }
+                "vitality", "vit" -> {
+                    val newVal = value.coerceIn(0, 300)
+                    c.copy(vitality = newVal, baseVitality = newVal)
+                }
+                "points", "statpoints" -> {
+                    val newVal = value.coerceIn(0, 999)
                     c.copy(statPoints = newVal)
                 }
                 else -> c
@@ -350,24 +391,188 @@ class CharacterViewModel : ViewModel() {
         return NoctonicJsonParser.toJson(_character.value)
     }
 
+    
     fun importSaveBytes(bytes: ByteArray, filename: String): Boolean {
+        Log.d("D1SaveBridge", "Importing save: $filename, size: ${bytes.size}")
+        var stagedArchive: File? = null
         return try {
-            val mpq = MpqTool.analyzeMpqHeader(bytes)
-            _mpqInfo.value = mpq
-            _hexDump.value = MpqTool.formatHexDump(bytes, 24)
+            val lower = filename.lowercase()
+            val extension = if (lower.endsWith(".${SaveConstants.HELLFIRE_EXTENSION}")) SaveConstants.HELLFIRE_EXTENSION else SaveConstants.STANDARD_EXTENSION
 
-            val parsedHero = DevilutionXSaveParser.parseSaveBytes(bytes, filename)
-            _character.value = parsedHero
-            showMessage("Imported $filename (${parsedHero.name}, Lv ${parsedHero.level} ${parsedHero.heroClass.displayName}${if (parsedHero.isMultiplayer) " [Multiplayer]" else ""})")
-            true
+            stagedArchive = File.createTempFile(SaveConstants.TEMP_FILE_PREFIX, ".$extension")
+            stagedArchive.writeBytes(bytes)
+
+            var isMultiplayer = lower.contains("multi") || lower.contains(SaveConstants.MULTIPLAYER_PREFIX.replace("_", ""))
+            var isHellfire = extension == SaveConstants.HELLFIRE_EXTENSION || lower.contains("hellfire") || lower.contains("hf")
+            var isSpawn = lower.contains("spawn")
+
+            Log.d("D1SaveBridge", "Flags: multi=$isMultiplayer hellfire=$isHellfire spawn=$isSpawn")
+
+            var rawHero = tryReadHero(stagedArchive.absolutePath, isMultiplayer, isSpawn, isHellfire)
+
+            if (rawHero == null || rawHero.isEmpty()) {
+                Log.w("D1SaveBridge", "First attempt failed, retrying with flipped flags")
+                rawHero = tryReadHero(stagedArchive.absolutePath, !isMultiplayer, isSpawn, !isHellfire)
+                if (rawHero != null && rawHero.isNotEmpty()) {
+                    isMultiplayer = !isMultiplayer
+                    isHellfire = !isHellfire
+                }
+            }
+
+            if (rawHero != null && rawHero.isNotEmpty()) {
+                importedOriginalSave = bytes.copyOf()
+                importedRawHero = rawHero.copyOf()
+                val parsedHero = parseNativePlayerPack(rawHero).copy(
+                    isMultiplayer = isMultiplayer,
+                    gameMod = if (isHellfire) GameMod.HELLFIRE else _character.value.gameMod
+                ) 
+                _character.value = parsedHero
+                showMessage("Successfully imported $filename")
+                true
+            } else {
+                showMessage("Import failed: No hero data found")
+                false
+            }
         } catch (e: Exception) {
-            showMessage("Save parse error: ${e.message}")
+            Log.e("D1SaveBridge", "Błąd importu: ${e.message}", e)
+            showMessage("Crash caught: ${e.message}")
             false
+        } finally {
+            try {
+                stagedArchive?.delete()
+            } catch (e: Exception) {
+                Log.e("D1SaveBridge", "Error deleting staged archive", e)
+            }
         }
     }
 
-    fun exportSaveMpqBytes(): ByteArray {
-        return DevilutionXSaveParser.createSaveFileMpq(_character.value)
+    private fun tryReadHero(path: String, multiplayer: Boolean, spawn: Boolean, hellfire: Boolean): ByteArray? {
+        return try {
+            NativeSaveBridge.readHero(path, multiplayer, spawn, hellfire, hellfire)
+        } catch (e: Exception) {
+            Log.w("D1SaveBridge", "readHero failed (multi=$multiplayer hf=$hellfire): ${e.message}")
+            null
+        }
+    }
+    private fun parseNativePlayerPack(raw: ByteArray): HeroCharacter {
+        val buffer = ByteBuffer.wrap(raw).order(ByteOrder.LITTLE_ENDIAN)
+        
+        if (raw.size < 512) { // Minimal expected PlayerPack size
+            Log.e("D1SaveBridge", "Hero payload too small: ${raw.size} bytes")
+            return _character.value
+        }
+
+        // pName starts at 0x10 (32 bytes)
+        val nameBytes = ByteArray(32)
+        buffer.position(0x10)
+        buffer.get(nameBytes)
+        val parsedName = String(nameBytes).substringBefore('\u0000').trim()
+
+        // pClass = 48 (1 byte)
+        val classIndex = buffer.get(48).toInt() and 0xFF
+        val heroClass = HeroClass.fromIndex(classIndex)
+
+        // pBaseStr = 49 (1 byte), pBaseMag = 50 (1 byte), pBaseDex = 51 (1 byte), pBaseVit = 52 (1 byte)
+        val baseStrength = buffer.get(49).toInt() and 0xFF
+        val baseMagic = buffer.get(50).toInt() and 0xFF
+        val baseDexterity = buffer.get(51).toInt() and 0xFF
+        val baseVitality = buffer.get(52).toInt() and 0xFF
+
+        // pLevel = 53 (1 byte), pStatPts = 54 (1 byte)
+        val level = buffer.get(53).toInt() and 0xFF
+        val statPoints = buffer.get(54).toInt() and 0xFF
+
+        // pExperience = 55 (4 bytes)
+        val experience = buffer.getInt(55).toLong() and 0xFFFFFFFFL
+
+        // pGold = 59 (4 bytes)
+        val gold = buffer.getInt(59).toLong() and 0xFFFFFFFFL
+
+        // pHPBase = 63 (4 bytes)
+        val rawHpBase = buffer.getInt(63)
+        // pMaxHPBase = 67 (4 bytes)
+        val rawMaxHp = buffer.getInt(67)
+        // pManaBase = 71 (4 bytes)
+        val rawManaBase = buffer.getInt(71)
+        // pMaxManaBase = 75 (4 bytes)
+        val rawMaxMana = buffer.getInt(75)
+
+        val currentHp = (rawHpBase / 64).coerceAtLeast(1)
+        val maxHp = (rawMaxHp / 64).coerceAtLeast(1)
+        val currentMana = (rawManaBase / 64).coerceAtLeast(0)
+        val maxMana = (rawMaxMana / 64).coerceAtLeast(0)
+
+        // Helper to parse ItemPack from buffer
+        fun parseItem(offset: Int): DiabloItem? {
+            if (offset + 20 > raw.size) return null
+            val iSeed = buffer.getInt(offset)
+            if (iSeed == 0) return null // Empty slot
+            val idx = buffer.getShort(offset + 6).toInt() and 0xFFFF
+            
+            return ItemArmory.FULL_ITEM_LIBRARY.getOrNull(idx % ItemArmory.FULL_ITEM_LIBRARY.size) ?: 
+                DiabloItem(
+                    name = "Unknown Item ($idx)",
+                    baseType = "Unknown",
+                    durability = buffer.get(offset + 9).toInt() and 0xFF,
+                    maxDurability = buffer.get(offset + 10).toInt() and 0xFF
+                )
+        }
+        
+        val equipment = mutableMapOf<EquipSlot, DiabloItem>()
+        val slots = arrayOf(
+            EquipSlot.HEAD, EquipSlot.NECK, EquipSlot.TORSO, 
+            EquipSlot.LEFT_HAND, EquipSlot.RIGHT_HAND, 
+            EquipSlot.LEFT_RING, EquipSlot.RIGHT_RING
+        )
+        // InvBody is at 0x90 in PlayerPack
+        for (i in slots.indices) {
+            parseItem(0x90 + i * 20)?.let { equipment[slots[i]] = it }
+        }
+
+        val inventory = mutableListOf<DiabloItem>()
+        // InvList is at 0x90 + 7 * 20 = 0x11C
+        for (i in 0 until 40) {
+            parseItem(0x11C + i * 20)?.let { inventory.add(it) }
+        }
+
+        return _character.value.copy(
+            name = if (parsedName.isBlank()) "Bezimienny" else parsedName,
+            heroClass = heroClass,
+            level = level,
+            experience = experience,
+            gold = gold,
+            statPoints = statPoints,
+            baseStrength = baseStrength,
+            strength = baseStrength,
+            baseMagic = baseMagic,
+            magic = baseMagic,
+            baseDexterity = baseDexterity,
+            dexterity = baseDexterity,
+            baseVitality = baseVitality,
+            vitality = baseVitality,
+            life = currentHp,
+            maxLife = maxHp,
+            baseLife = maxHp,
+            mana = currentMana,
+            maxMana = maxMana,
+            baseMana = maxMana,
+            equipment = equipment,
+            inventory = inventory
+        )
+    }
+
+    fun exportSaveMpqBytes(backupDirectory: java.io.File? = null): ByteArray {
+        val original = importedOriginalSave
+            ?: throw IllegalStateException("No imported MPQ bytes available for native save export.")
+        
+        val dir = backupDirectory 
+            ?: throw IllegalArgumentException("Backup directory is required for native save export.")
+
+        return com.example.data.service.SaveFileService().exportNativeSave(
+            originalBytes = original,
+            hero = _character.value,
+            backupDirectory = java.io.File(dir, "native-save-backups"),
+        )
     }
 
     fun inspectBytes(bytes: ByteArray) {
