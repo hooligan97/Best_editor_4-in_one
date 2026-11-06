@@ -22,7 +22,7 @@ class SaveFileService {
      * Serializes a list of DiabloItems into a ByteArray of fixed-size ItemPack structs.
      */
     private fun serializeItems(items: List<DiabloItem?>, maxItems: Int): ByteArray {
-        val itemSize = 20
+        val itemSize = 19 // Struct is 19 bytes
         val buffer = ByteBuffer.allocate(maxItems * itemSize).order(ByteOrder.LITTLE_ENDIAN)
 
         for (i in 0 until maxItems) {
