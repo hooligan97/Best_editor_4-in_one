@@ -1,9 +1,12 @@
 package com.example.data.service
 
 import com.example.data.model.HeroCharacter
-import com.example.data.parser.DevilutionXSaveParser
 import com.example.data.parser.MpqHeaderInfo
 import com.example.data.parser.MpqTool
+import com.example.data.parser.NativeSaveBridge
+import com.example.data.parser.SaveConstants
+import java.io.File
+import java.util.UUID
 
 /**
  * Service for handling DevilutionX save file I/O operations.
@@ -12,17 +15,73 @@ import com.example.data.parser.MpqTool
 class SaveFileService {
 
     /**
-     * Parses binary save data into a HeroCharacter object.
+     * Uses the native PlayerPack writer on a staged copy of the imported MPQ.
+     * The original bytes are backed up before the staged archive is modified.
+     * Only fields currently supported by NativeSaveBridge.patchField are patched.
      */
-    fun parseSave(bytes: ByteArray, filename: String = ""): HeroCharacter {
-        return DevilutionXSaveParser.parseSaveBytes(bytes, filename)
-    }
+    fun exportNativeSave(
+        originalBytes: ByteArray,
+        hero: HeroCharacter,
+        backupDirectory: File,
+    ): ByteArray {
+        require(originalBytes.isNotEmpty()) { "No imported MPQ bytes are available." }
+        check(backupDirectory.mkdirs() || backupDirectory.isDirectory) {
+            "Unable to create native save backup directory."
+        }
 
-    /**
-     * Serializes a HeroCharacter back into a binary MPQ save file.
-     */
-    fun exportSave(hero: HeroCharacter): ByteArray {
-        return DevilutionXSaveParser.createSaveFileMpq(hero)
+        val id = UUID.randomUUID().toString()
+        val extension = if (hero.gameMod == com.example.data.model.GameMod.HELLFIRE) SaveConstants.HELLFIRE_EXTENSION else SaveConstants.STANDARD_EXTENSION
+        val stagedArchive = File(backupDirectory, "${SaveConstants.TEMP_FILE_PREFIX.replace("-", "_")}$id.$extension")
+        val backupFile = File(backupDirectory, "native-backup-$id.bak")
+        backupFile.writeBytes(originalBytes)
+        stagedArchive.writeBytes(originalBytes)
+
+        try {
+            val isHellfire = hero.gameMod == com.example.data.model.GameMod.HELLFIRE
+            var rawHero = NativeSaveBridge.readHero(
+                stagedArchive.absolutePath,
+                hero.isMultiplayer,
+                false,
+                isHellfire,
+                isHellfire
+            )
+            fun patch(field: String, value: Any) {
+                rawHero = NativeSaveBridge.patchField(rawHero, field, value)
+            }
+
+            patch("level", hero.level.toLong())
+            patch("class", hero.heroClass.ordinal.toLong())
+            patch("baseStrength", hero.baseStrength.toLong())
+            patch("baseMagic", hero.baseMagic.toLong())
+            patch("baseDexterity", hero.baseDexterity.toLong())
+            patch("baseVitality", hero.baseVitality.toLong())
+            patch("statPoints", hero.statPoints.toLong())
+            patch("experience", hero.experience)
+            patch("gold", hero.gold)
+            patch("hpBase", hero.baseLife.toLong() * SaveConstants.HP_MANA_SCALE_FACTOR)
+            patch("maxHpBase", hero.maxLife.toLong() * SaveConstants.HP_MANA_SCALE_FACTOR)
+            patch("manaBase", hero.baseMana.toLong() * SaveConstants.HP_MANA_SCALE_FACTOR)
+            patch("maxManaBase", hero.maxMana.toLong() * SaveConstants.HP_MANA_SCALE_FACTOR)
+
+            // Do not rewrite ItemPack arrays yet: the UI model cannot round-trip all
+            // native/mod-specific fields. Preserve original inventory bytes unchanged.
+
+            NativeSaveBridge.writeHero(
+                stagedArchive.absolutePath,
+                rawHero,
+                hero.isMultiplayer,
+                false,
+                hero.gameMod == com.example.data.model.GameMod.HELLFIRE,
+            )
+            check(stagedArchive.isFile && stagedArchive.length() > 0L) {
+                "Native MPQ writer produced an empty archive."
+            }
+            return stagedArchive.readBytes().also { result ->
+                check(result.isNotEmpty()) { "Native MPQ export returned 0 bytes." }
+            }
+        } finally {
+            stagedArchive.delete()
+        }
     }
 
     /**

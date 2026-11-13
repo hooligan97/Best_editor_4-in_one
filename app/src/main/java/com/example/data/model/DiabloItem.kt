@@ -1,6 +1,7 @@
 package com.example.data.model
 
 import java.util.UUID
+import kotlin.random.Random
 
 enum class ItemQuality(val displayName: String) {
     NORMAL("Normal"),
@@ -51,7 +52,9 @@ data class DiabloItem(
     val gridY: Int = -1,
     val modOrigin: GameMod = GameMod.VANILLA_DIABLO,
     val recommendedClasses: List<HeroClass> = emptyList(),
-    val defaultSlot: EquipSlot? = null
+    val defaultSlot: EquipSlot? = null,
+    val iSeed: Int = Random.nextInt(1, Int.MAX_VALUE),
+    val itemIndex: Int = 0
 ) {
     val fullTitle: String
         get() = when (quality) {

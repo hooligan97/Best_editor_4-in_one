@@ -1,0 +1,27 @@
+PODSUMOWANIE SESJI - 2 Listopada 2026
+Gałąź: feature/native-save-bridge
+
+WYKONANE PRACE:
+1. Naprawa błędów kompilacji JNI:
+   - Zaktualizowano sygnatury readHero i writeHero w NativeSaveBridge.kt i native_save_bridge.cpp (dodano flagi isHellfire, isHellfireSaveGame, isSpawn).
+   - Poprawiono wywołania w CharacterViewModel.kt i SaveFileService.kt.
+
+2. Refaktoryzacja i Centralizacja:
+   - Stworzono SaveConstants.kt dla stałych (mnożnik 64, prefiksy plików, rozszerzenia).
+   - Zaktualizowano importy i logikę w całym projekcie.
+
+3. Debugowanie i Diagnostyka:
+   - Dodano szczegółowe logowanie (Log.d i __android_log_print) w warstwie Kotlin i C++.
+   - Zaimplementowano wyświetlanie rzeczywistych rozmiarów PlayerPack w komunikatach błędów UI.
+   - Dodano logowanie używanego hasła deszyfrującego w pfile.cpp.
+
+4. Poprawa UX i Robustness:
+   - Zaktualizowano SaveFilePicker.kt, aby poprawnie pobierał nazwy plików z SAF (OpenableColumns.DISPLAY_NAME).
+   - Dodano mechanizm retry w CharacterViewModel.kt (próba wczytania z odwróconymi flagami multi/hellfire).
+   - Poluzowano walidację rozmiaru PlayerPack w C++ (obsługa VKDMod, min. 812 bajtów).
+
+5. Poprawki Builda:
+   - Poprawiono CMakeLists.txt (podlinkowanie liblog), co rozwiązało błędy linkera.
+
+STATUS:
+Kod jest spójny, linkowanie działa, a mechanizm importu jest znacznie bardziej odporny na błędy i różnice w formatach plików.

@@ -41,7 +41,9 @@ fun SaveManagerScreen(
     val mpqInfo by viewModel.mpqInfo.collectAsState()
     val hexDump by viewModel.hexDump.collectAsState()
     val vault by viewModel.vault.collectAsState()
+    val hasImportedNativeSave by viewModel.hasImportedNativeSave.collectAsState()
 
+    var pendingMpqBytes by remember { mutableStateOf<ByteArray?>(null) }
     var showJsonDialog by remember { mutableStateOf(false) }
     var jsonInputText by remember { mutableStateOf("") }
     var showSnapshotDialog by remember { mutableStateOf(false) }
@@ -68,15 +70,40 @@ fun SaveManagerScreen(
         contract = ActivityResultContracts.CreateDocument("application/octet-stream")
     ) { uri ->
         if (uri != null) {
+            val mpqBytes = pendingMpqBytes
+            pendingMpqBytes = null
             runCatching {
-                context.contentResolver.openOutputStream(uri)?.use { stream ->
-                    val mpqBytes = viewModel.exportSaveMpqBytes()
-                    stream.write(mpqBytes)
+                check(mpqBytes != null && mpqBytes.isNotEmpty()) {
+                    "No prepared save data. Import the original .sv/.hsv file and retry."
                 }
-                viewModel.showMessage("DevilutionX Save exported successfully (${if (hero.isMultiplayer) "Multiplayer" else "Single Player"})!")
+                val output = context.contentResolver.openOutputStream(uri, "wt")
+                    ?: error("Android could not open the selected destination for writing.")
+                output.use { stream ->
+                    stream.write(mpqBytes)
+                    stream.flush()
+                }
+                viewModel.showMessage("DevilutionX save exported (" + mpqBytes.size + " bytes).")
             }.onFailure {
                 viewModel.showMessage("Failed to export: ${it.message}")
             }
+        } else {
+            pendingMpqBytes = null
+        }
+    }
+
+    fun prepareNativeExport(filename: String) {
+        if (!hasImportedNativeSave) {
+            viewModel.showMessage("Najpierw otwórz oryginalny zapis .sv/.hsv. JSON nie zawiera archiwum MPQ.")
+            return
+        }
+        runCatching {
+            val bytes = viewModel.exportSaveMpqBytes(context.filesDir)
+            check(bytes.isNotEmpty()) { "Generated MPQ save is empty." }
+            pendingMpqBytes = bytes
+            createSaveLauncher.launch(filename)
+        }.onFailure {
+            pendingMpqBytes = null
+            viewModel.showMessage("Nie można przygotować zapisu: ${it.message}")
         }
     }
 
@@ -85,11 +112,15 @@ fun SaveManagerScreen(
     ) { uri ->
         if (uri != null) {
             runCatching {
-                context.contentResolver.openOutputStream(uri)?.use { stream ->
-                    val jsonBytes = viewModel.getNoctonicJson().toByteArray(Charsets.UTF_8)
+                val jsonBytes = viewModel.getNoctonicJson().toByteArray(Charsets.UTF_8)
+                check(jsonBytes.isNotEmpty()) { "Generated JSON is empty." }
+                val output = context.contentResolver.openOutputStream(uri, "wt")
+                    ?: error("Android could not open the selected JSON destination for writing.")
+                output.use { stream ->
                     stream.write(jsonBytes)
+                    stream.flush()
                 }
-                viewModel.showMessage("Noctonic JSON exported successfully!")
+                viewModel.showMessage("Noctonic JSON exported successfully (" + jsonBytes.size + " bytes).")
             }.onFailure {
                 viewModel.showMessage("Failed to export JSON: ${it.message}")
             }
@@ -223,11 +254,11 @@ fun SaveManagerScreen(
                     ) {
                         Icon(Icons.Default.FileOpen, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Otwórz plik .sv", fontSize = 12.sp)
+                        Text("Otwórz plik zapisu", fontSize = 12.sp)
                     }
 
                     FilledTonalButton(
-                        onClick = { createSaveLauncher.launch(defaultSaveFilename) },
+                        onClick = { prepareNativeExport(defaultSaveFilename) },
                         colors = ButtonDefaults.filledTonalButtonColors(
                             containerColor = BloodRedDark,
                             contentColor = Color.White
@@ -238,7 +269,11 @@ fun SaveManagerScreen(
                     ) {
                         Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Zapisz $defaultSaveFilename", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text(
+                            if (hasImportedNativeSave) "Zapisz $defaultSaveFilename" else "Najpierw otwórz .sv/.hsv",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
 
@@ -251,8 +286,9 @@ fun SaveManagerScreen(
                 ) {
                     OutlinedButton(
                         onClick = {
+                            viewModel.setGameMod(GameMod.VANILLA_DIABLO)
                             viewModel.setIsMultiplayer(true)
-                            createSaveLauncher.launch("multi_0.sv")
+                            prepareNativeExport("multi_0.sv")
                         },
                         border = BorderStroke(1.dp, BloodRedDark),
                         modifier = Modifier.weight(1f)
@@ -262,9 +298,9 @@ fun SaveManagerScreen(
 
                     OutlinedButton(
                         onClick = {
-                            viewModel.setIsMultiplayer(true)
                             viewModel.setGameMod(GameMod.HELLFIRE)
-                            createSaveLauncher.launch("multi_0.hsv")
+                            viewModel.setIsMultiplayer(true)
+                            prepareNativeExport("multi_0.hsv")
                         },
                         border = BorderStroke(1.dp, BloodRedDark),
                         modifier = Modifier.weight(1f)
@@ -332,9 +368,12 @@ fun SaveManagerScreen(
 
                     FilledTonalButton(
                         onClick = {
-                            val testBytes = viewModel.exportSaveMpqBytes()
-                            viewModel.inspectBytes(testBytes)
-                            viewModel.showMessage("Przeanalizowano kontener MPQ DevilutionX")
+                            runCatching {
+                                viewModel.inspectImportedSave()
+                                viewModel.showMessage("Przeanalizowano oryginalny kontener MPQ")
+                            }.onFailure {
+                                viewModel.showMessage("Nie można przeanalizować zapisu: ${it.message}")
+                            }
                         },
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
                         modifier = Modifier.defaultMinSize(minHeight = 28.dp)
