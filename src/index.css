@@ -1,0 +1,84 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Cinzel", Georgia, serif;
+  --font-sans: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  --color-diablo-bg: #0C0908;
+  --color-diablo-surface: #161210;
+  --color-diablo-surface-variant: #221B18;
+  --color-diablo-surface-elevated: #2C221F;
+
+  --color-blood-red: #C82323;
+  --color-blood-red-bright: #EE3535;
+  --color-blood-red-dark: #751212;
+
+  --color-demonic-gold: #E5B044;
+  --color-demonic-gold-bright: #FFD464;
+  --color-demonic-gold-dark: #9E7422;
+
+  --color-arcane-blue: #2D7BDE;
+  --color-arcane-blue-bright: #5AA1FF;
+  --color-arcane-blue-dark: #17427C;
+
+  --color-unique-gold: #FFCC33;
+  --color-magic-blue: #4C8CFF;
+  --color-bone-white: #E8E0D5;
+  --color-bone-gray: #A59B93;
+  --color-dark-border: #3B2F2A;
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+    font-family: var(--font-sans);
+    background-color: #0C0908;
+    color: #E8E0D5;
+  }
+
+  /* Custom dark gothic scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: #0C0908;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #3B2F2A;
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #9E7422;
+  }
+
+  /* Custom range slider styling matching Diablo gold & blood red */
+  input[type="range"] {
+    accent-color: #E5B044;
+  }
+}
+
+.font-display {
+  font-family: var(--font-display);
+}
+
+.font-mono-tabular {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
