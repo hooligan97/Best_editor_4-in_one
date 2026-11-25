@@ -81,6 +81,7 @@ static_assert(sizeof(devilution::ItemPack) == 19, "Unexpected ItemPack layout");
 static_assert(sizeof(devilution::PlayerPack) == 1266, "Unexpected PlayerPack layout");
 static_assert(offsetof(devilution::PlayerPack, InvBody) == 0x7C, "Unexpected InvBody offset");
 static_assert(offsetof(devilution::PlayerPack, InvList) == 0x101, "Unexpected InvList offset");
+static_assert(offsetof(devilution::PlayerPack, _pNumInv) == 0x421, "Unexpected inventory count offset");
 
 extern "C" JNIEXPORT jbyteArray JNICALL
 Java_com_example_data_parser_NativeSaveBridge_readHero(

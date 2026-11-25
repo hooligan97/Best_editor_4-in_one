@@ -34,6 +34,8 @@ class CharacterViewModel : ViewModel() {
     private val _character = MutableStateFlow(HeroCharacter.createGodly(HeroClass.WARRIOR, "Aidan"))
     private var importedOriginalSave: ByteArray? = null
     private var importedRawHero: ByteArray? = null
+    private var importedEquipmentSnapshot: Map<EquipSlot, DiabloItem>? = null
+    private var importedInventorySnapshot: List<DiabloItem>? = null
     private var lastNativeReadError: String? = null
     private val _hasImportedNativeSave = MutableStateFlow(false)
     val hasImportedNativeSave: StateFlow<Boolean> = _hasImportedNativeSave.asStateFlow()
@@ -384,6 +386,8 @@ class CharacterViewModel : ViewModel() {
             // JSON is character data, not the original MPQ container needed for a safe .sv/.hsv round-trip.
             importedOriginalSave = null
             importedRawHero = null
+            importedEquipmentSnapshot = null
+            importedInventorySnapshot = null
             _hasImportedNativeSave.value = false
             _character.value = loaded
             showMessage("Successfully imported character: ${loaded.name} (Lv ${loaded.level} ${loaded.heroClass.displayName})")
@@ -403,6 +407,8 @@ class CharacterViewModel : ViewModel() {
         Log.d("D1SaveBridge", "Importing save: $filename, size: ${bytes.size}")
         importedOriginalSave = null
         importedRawHero = null
+        importedEquipmentSnapshot = null
+        importedInventorySnapshot = null
         _hasImportedNativeSave.value = false
         var stagedArchive: File? = null
         return try {
@@ -438,6 +444,8 @@ class CharacterViewModel : ViewModel() {
                     isMultiplayer = isMultiplayer,
                     gameMod = if (isHellfire) GameMod.HELLFIRE else _character.value.gameMod
                 ) 
+                importedEquipmentSnapshot = parsedHero.equipment.toMap()
+                importedInventorySnapshot = parsedHero.inventory.toList()
                 _character.value = parsedHero
                 showMessage("Successfully imported $filename")
                 true
@@ -522,13 +530,16 @@ class CharacterViewModel : ViewModel() {
             if (iSeed == 0) return null // Empty slot
             val idx = buffer.getShort(offset + 6).toInt() and 0xFFFF
             
-            return ItemArmory.FULL_ITEM_LIBRARY.getOrNull(idx % ItemArmory.FULL_ITEM_LIBRARY.size) ?: 
-                DiabloItem(
-                    name = "Unknown Item ($idx)",
-                    baseType = "Unknown",
-                    durability = buffer.get(offset + 9).toInt() and 0xFF,
-                    maxDurability = buffer.get(offset + 10).toInt() and 0xFF
-                )
+            // Native item IDs are not Kotlin catalog list positions. Never use modulo: it
+            // silently labels unrelated items as real catalog entries. Until an official
+            // ID-to-catalog map is available, preserve the numeric ID as an unknown item.
+            return ItemArmory.FULL_ITEM_LIBRARY.firstOrNull { it.itemIndex == idx } ?: DiabloItem(
+                name = "Native item #$idx",
+                baseType = "Unmapped native item",
+                durability = buffer.get(offset + 9).toInt() and 0xFF,
+                maxDurability = buffer.get(offset + 10).toInt() and 0xFF,
+                itemIndex = idx
+            )
         }
         
         val equipment = mutableMapOf<EquipSlot, DiabloItem>()
@@ -543,8 +554,12 @@ class CharacterViewModel : ViewModel() {
         }
 
         val inventory = mutableListOf<DiabloItem>()
+        // PlayerPack._pNumInv is at 0x421 (after InvGrid). InvList is a fixed
+        // 40-entry buffer; entries after _pNumInv are unused/stale bytes, not items.
+        val inventoryCount = buffer.get(0x421).toInt() and 0xFF
+        require(inventoryCount <= 40) { "Invalid PlayerPack inventory count: $inventoryCount" }
         // pack.h: InvList offset=0x101 (0x7C + 7 * 19).
-        for (i in 0 until 40) {
+        for (i in 0 until inventoryCount) {
             parseItem(0x101 + i * 19)?.let { inventory.add(it) }
         }
 
@@ -580,6 +595,15 @@ class CharacterViewModel : ViewModel() {
         
         val dir = backupDirectory 
             ?: throw IllegalArgumentException("Backup directory is required for native save export.")
+
+        val current = _character.value
+        val originalEquipment = importedEquipmentSnapshot
+            ?: throw IllegalStateException("Original equipment snapshot is missing; re-import the save.")
+        val originalInventory = importedInventorySnapshot
+            ?: throw IllegalStateException("Original inventory snapshot is missing; re-import the save.")
+        check(current.equipment == originalEquipment && current.inventory == originalInventory) {
+            "Zmiany wyposażenia lub plecaka nie są jeszcze zapisywane do PlayerPack. Eksport przerwany, aby nie zgubić zmian ani nie zgłosić fałszywego sukcesu."
+        }
 
         return com.example.data.service.SaveFileService().exportNativeSave(
             originalBytes = original,

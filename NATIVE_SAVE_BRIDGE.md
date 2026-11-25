@@ -30,3 +30,10 @@ The upstream CMake defines a desktop CLI executable in addition to `d1edit`. The
 This integration has not yet been built with Android NDK or verified against a real `.sv`/`.hsv` in Android runtime. Before release, build supported ABIs and test read → patch → write → reread for single-player, multiplayer, Spawn, and Hellfire saves. Compare untouched raw bytes and write to a backup/copy first.
 
 The C++ code is derived from DevilutionX and has license obligations. Retain upstream notices and review distribution compatibility.
+
+## Inventory and Hellfire Multiplayer limitations
+
+- The native `PlayerPack` inventory buffer always reserves 40 `InvList` entries. Only the first `_pNumInv` entries are live; remaining entries can contain stale bytes and must not be presented as backpack items. The Kotlin reader uses the packed `_pNumInv` field at offset `0x421`.
+- Native item `idx` values are not positions in the Kotlin display catalog. Until an authoritative ID map is available, the UI labels unmatched native IDs instead of assigning a misleading catalog item by modulo.
+- Equipment/backpack changes are not serialized yet. Export is stopped when those collections differ from the imported snapshot, rather than silently dropping the changes.
+- Legacy Hellfire Multiplayer uses a computer-name-derived codec key. The current bridge does not have the original host name/key and must not write it with the fixed Diablo Multiplayer password. Hellfire MP export is therefore rejected until the correct key source is implemented and tested.

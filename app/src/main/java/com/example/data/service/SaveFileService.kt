@@ -25,6 +25,9 @@ class SaveFileService {
         backupDirectory: File,
     ): ByteArray {
         require(originalBytes.isNotEmpty()) { "No imported MPQ bytes are available." }
+        require(!(hero.isMultiplayer && hero.gameMod == com.example.data.model.GameMod.HELLFIRE)) {
+            "Hellfire Multiplayer export is disabled: the legacy Hellfire MP hero entry uses a computer-name-derived codec key. The current bridge only has fixed Diablo/Spawn passwords, so writing would create an unreadable save. No output was written."
+        }
         check(backupDirectory.mkdirs() || backupDirectory.isDirectory) {
             "Unable to create native save backup directory."
         }
